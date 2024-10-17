@@ -4,12 +4,12 @@ import Toolbar from "./Toolbar";
 import { useEditorState } from "./useEditorState";
 
 interface EditorProps {
-  currentFile: string | null;
-  initialContent: string;
+  currentFile: { name: string; content: string } | null;
   onContentChange: (content: string) => void;
+  onBlur: () => void;
 }
 
-const Editor: React.FC<EditorProps> = ({ currentFile, initialContent, onContentChange }) => {
+const Editor: React.FC<EditorProps> = ({ currentFile, onContentChange, onBlur }) => {
   const {
     html,
     setHtml,
@@ -40,8 +40,10 @@ const Editor: React.FC<EditorProps> = ({ currentFile, initialContent, onContentC
   }, [html]);
 
   useEffect(() => {
-    setHtml(initialContent);
-  }, [initialContent]);
+    if (currentFile) {
+      setHtml(currentFile.content);
+    }
+  }, [currentFile]);
 
   const initializeIframe = () => {
     if (iframeRef.current) {
@@ -148,7 +150,10 @@ const Editor: React.FC<EditorProps> = ({ currentFile, initialContent, onContentC
       }
     };
     doc.querySelector('.page')!.addEventListener("input", updateHtml);
-    doc.querySelector('.page')!.addEventListener("blur", updateHtml);
+    doc.querySelector('.page')!.addEventListener("blur", () => {
+      updateHtml();
+      onBlur();
+    });
   };
 
   const applyFormatting = useCallback((command: string, value: string = "") => {

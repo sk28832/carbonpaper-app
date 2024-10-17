@@ -10,19 +10,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-interface FileExplorerProps {
-  isOpen: boolean;
-  onFileSelect: (fileName: string, content: string) => void;
-}
-
 interface FileItem {
   name: string;
   content: string;
 }
 
-const FileExplorer: React.FC<FileExplorerProps> = ({ isOpen, onFileSelect }) => {
-  const [files, setFiles] = useState<FileItem[]>([]);
+interface FileExplorerProps {
+  isOpen: boolean;
+  files: FileItem[];
+  onFileSelect: (file: FileItem) => void;
+  onFileRename: (oldName: string, newName: string) => void;
+  onFileAdd: (file: FileItem) => void;
+}
+
+const FileExplorer: React.FC<FileExplorerProps> = ({ isOpen, files, onFileSelect, onFileRename, onFileAdd }) => {
   const [editingFile, setEditingFile] = useState<string | null>(null);
+  const [newFileName, setNewFileName] = useState<string>('');
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -31,8 +34,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ isOpen, onFileSelect }) => 
       reader.onload = (e) => {
         const content = e.target?.result as string;
         const newFile = { name: file.name, content };
-        setFiles(prevFiles => [...prevFiles, newFile]);
-        onFileSelect(file.name, content); // Automatically select the imported file
+        onFileAdd(newFile);
+        onFileSelect(newFile);
       };
       reader.readAsText(file);
     }
@@ -53,10 +56,15 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ isOpen, onFileSelect }) => 
     }
   };
 
-  const handleRename = (index: number, newName: string) => {
-    const newFiles = [...files];
-    newFiles[index].name = newName;
-    setFiles(newFiles);
+  const startRenaming = (fileName: string) => {
+    setEditingFile(fileName);
+    setNewFileName(fileName);
+  };
+
+  const handleRename = () => {
+    if (editingFile && newFileName && newFileName !== editingFile) {
+      onFileRename(editingFile, newFileName);
+    }
     setEditingFile(null);
   };
 
@@ -83,18 +91,18 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ isOpen, onFileSelect }) => 
           </Button>
         </div>
         <ul className="space-y-2">
-          {files.map((file, index) => (
-            <li key={index} className="flex items-center justify-between bg-white p-2 rounded-md shadow-sm">
+          {files.map((file) => (
+            <li key={file.name} className="flex items-center justify-between bg-white p-2 rounded-md shadow-sm">
               {editingFile === file.name ? (
                 <Input
-                  value={file.name}
-                  onChange={(e) => handleRename(index, e.target.value)}
-                  onBlur={() => setEditingFile(null)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleRename(index, (e.target as HTMLInputElement).value)}
+                  value={newFileName}
+                  onChange={(e) => setNewFileName(e.target.value)}
+                  onBlur={handleRename}
+                  onKeyPress={(e) => e.key === 'Enter' && handleRename()}
                   autoFocus
                 />
               ) : (
-                <span className="cursor-pointer truncate flex-grow" onClick={() => onFileSelect(file.name, file.content)}>
+                <span className="cursor-pointer truncate flex-grow" onClick={() => onFileSelect(file)}>
                   {file.name}
                 </span>
               )}
@@ -105,7 +113,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ isOpen, onFileSelect }) => 
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
-                  <DropdownMenuItem onClick={() => setEditingFile(file.name)}>
+                  <DropdownMenuItem onClick={() => startRenaming(file.name)}>
                     <Edit2 className="h-4 w-4 mr-2" />
                     Rename
                   </DropdownMenuItem>
