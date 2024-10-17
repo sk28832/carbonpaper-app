@@ -37,17 +37,23 @@ const CarbonPaper = () => {
               <style>
                 body {
                   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                  padding: 40px;
+                  padding: 20px;
                   color: #333;
                   background-color: white;
                   line-height: 1.6;
                   width: 100%;
-                  max-width: 900px;
+                  max-width: 100%;
                   margin: 0 auto;
                   min-height: 100vh;
                 }
                 body[contenteditable="true"] { outline: none; }
                 h1 { color: #2c3e50; }
+                @media (min-width: 640px) {
+                  body {
+                    padding: 40px;
+                    max-width: 900px;
+                  }
+                }
               </style>
             </head>
             <body contenteditable="true"></body>
@@ -145,9 +151,9 @@ const CarbonPaper = () => {
 
   return (
     <div className="flex flex-col h-screen bg-gray-100">
-      <header className="bg-white shadow-sm p-4 flex justify-between items-center">
-        <h1 className="text-xl font-semibold text-gray-800">CarbonPaper</h1>
-        <div className="flex space-x-4">
+      <header className="bg-white shadow-sm p-4 flex flex-col sm:flex-row justify-between items-center">
+        <h1 className="text-xl font-semibold text-gray-800 mb-4 sm:mb-0">CarbonPaper</h1>
+        <div className="flex space-x-2 sm:space-x-4">
           <Button
             onClick={handleImport}
             variant="outline"
@@ -171,9 +177,9 @@ const CarbonPaper = () => {
           />
         </div>
       </header>
-      <div className="bg-white shadow-sm p-2 flex space-x-2">
+      <div className="bg-white shadow-sm p-2 flex flex-wrap gap-2">
         <Select onValueChange={(value) => execCommand("fontName", value)}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="Select Font" />
           </SelectTrigger>
           <SelectContent>
@@ -185,7 +191,7 @@ const CarbonPaper = () => {
         </Select>
 
         <Select onValueChange={(value) => execCommand("fontSize", value)}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="Select Font Size" />
           </SelectTrigger>
           <SelectContent>
@@ -197,46 +203,48 @@ const CarbonPaper = () => {
           </SelectContent>
         </Select>
 
-        <Button onClick={() => execCommand("bold")} variant="outline">
-          B
-        </Button>
-        <Button onClick={() => execCommand("italic")} variant="outline">
-          I
-        </Button>
-        <Button onClick={() => execCommand("underline")} variant="outline">
-          U
-        </Button>
-        <Button onClick={() => execCommand("indent")} variant="outline">
-          →
-        </Button>
-        <Button onClick={() => execCommand("outdent")} variant="outline">
-          ←
-        </Button>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline">Color</Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-40">
-            {[
-              "red",
-              "blue",
-              "green",
-              "yellow",
-              "purple",
-              "orange",
-              "black",
-            ].map((color) => (
-              <Button
-                key={color}
-                className="w-6 h-6 m-1"
-                style={{ backgroundColor: color }}
-                onClick={() => execCommand("foreColor", color)}
-              />
-            ))}
-          </PopoverContent>
-        </Popover>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => execCommand("bold")} variant="outline">
+            B
+          </Button>
+          <Button onClick={() => execCommand("italic")} variant="outline">
+            I
+          </Button>
+          <Button onClick={() => execCommand("underline")} variant="outline">
+            U
+          </Button>
+          <Button onClick={() => execCommand("indent")} variant="outline">
+            →
+          </Button>
+          <Button onClick={() => execCommand("outdent")} variant="outline">
+            ←
+          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline">Color</Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-40">
+              {[
+                "red",
+                "blue",
+                "green",
+                "yellow",
+                "purple",
+                "orange",
+                "black",
+              ].map((color) => (
+                <Button
+                  key={color}
+                  className="w-6 h-6 m-1"
+                  style={{ backgroundColor: color }}
+                  onClick={() => execCommand("foreColor", color)}
+                />
+              ))}
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
-      <main className="flex-grow p-6 flex justify-center overflow-auto">
+      <main className="flex-grow p-2 sm:p-6 flex justify-center overflow-auto">
         <div className="w-full max-w-5xl bg-white rounded-lg shadow-md">
           <iframe
             ref={iframeRef}
