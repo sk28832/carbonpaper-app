@@ -6,10 +6,9 @@ import { Input } from '@/components/ui/input';
 
 interface AIChatProps {
   isOpen: boolean;
-  onToggle: () => void;
 }
 
-const AIChat: React.FC<AIChatProps> = ({ isOpen, onToggle }) => {
+const AIChat: React.FC<AIChatProps> = ({ isOpen }) => {
   const [messages, setMessages] = useState<{ text: string; isUser: boolean }[]>([]);
   const [input, setInput] = useState('');
 
@@ -25,11 +24,10 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onToggle }) => {
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className={`h-full bg-white border-l border-gray-200 flex flex-col ${isOpen ? '' : 'hidden'}`}>
-      <div className="flex justify-between items-center p-4 border-b border-gray-200">
-        <h2 className="text-lg font-semibold">AI Assistant</h2>
-      </div>
+    <div className="w-64 h-full bg-white border-l border-gray-200 flex flex-col">
       <div className="flex-grow overflow-auto p-4 space-y-4">
         {messages.map((message, index) => (
           <div key={index} className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}>
