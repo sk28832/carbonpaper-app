@@ -54,6 +54,19 @@ const CarbonPaper = () => {
                     max-width: 900px;
                   }
                 }
+                @media print {
+                  body {
+                    size: 8.5in 11in;
+                    margin: 1in;
+                  }
+                }
+                @page {
+                  size: 8.5in 11in;
+                  margin: 1in;
+                }
+                .page-break {
+                  page-break-before: always;
+                }
               </style>
             </head>
             <body contenteditable="true"></body>
