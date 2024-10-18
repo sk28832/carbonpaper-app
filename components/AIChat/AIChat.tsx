@@ -70,7 +70,7 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen }) => {
             placeholder="Type your message..."
             className="flex-grow"
           />
-          <Button onClick={handleSend} className="bg-black hover:bg-gray-800 text-white">
+          <Button onClick={handleSend} className="bg-blue-500 hover:bg-blue-600 text-white">
             <Send className="h-4 w-4" />
           </Button>
         </div>

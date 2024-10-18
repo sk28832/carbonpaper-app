@@ -1,6 +1,6 @@
 // File: components/FileExplorer/FileExplorer.tsx
 import React, { useState } from "react";
-import { Upload, Download, MoreVertical, Edit2, Plus } from "lucide-react";
+import { Upload, Download, MoreVertical, Edit2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,13 +11,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FileItem } from "@/types/fileTypes";
 
-
 interface FileExplorerProps {
   isOpen: boolean;
   files: FileItem[];
   onFileSelect: (file: FileItem) => void;
   onFileRename: (fileId: string, newName: string) => void;
   onFileAdd: (file: FileItem) => void;
+  onFileDelete: (fileId: string) => void;
   currentFileId: string;
 }
 
@@ -27,6 +27,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   onFileSelect,
   onFileRename,
   onFileAdd,
+  onFileDelete,
   currentFileId,
 }) => {
   const [editingFile, setEditingFile] = useState<string | null>(null);
@@ -148,6 +149,10 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                   <DropdownMenuItem onClick={() => startRenaming(file.id, file.name)}>
                     <Edit2 className="h-4 w-4 mr-2" />
                     Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onFileDelete(file.id)} className="text-red-500">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

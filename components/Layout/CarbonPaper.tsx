@@ -1,11 +1,13 @@
 // File: components/Layout/CarbonPaper.tsx
 "use client";
 import React, { useState, useCallback, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import FileExplorer from "../FileExplorer/FileExplorer";
 import Editor from "../Editor/Editor";
 import AIChat from "../AIChat/AIChat";
-import { PanelLeft, BotIcon, Save, Check } from "lucide-react";
+import { PanelLeft, BotIcon, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -22,43 +24,39 @@ const CarbonPaper: React.FC = () => {
   const [currentFile, setCurrentFile] = useState<FileItem>({
     id: "default",
     name: "Untitled",
-    content: "<h1>Welcome to CarbonPaper</h1><p>Start crafting your document...</p>",
+    content:
+      "<h1>Welcome to CarbonPaper</h1><p>Start crafting your document...</p>",
     isSaved: true,
   });
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [pendingFileSelect, setPendingFileSelect] = useState<FileItem | null>(null);
+  const [pendingFileSelect, setPendingFileSelect] = useState<FileItem | null>(
+    null
+  );
+  const [isEditingFileName, setIsEditingFileName] = useState(false);
   const currentFileIdRef = useRef(currentFile.id);
 
   useEffect(() => {
     setFiles([currentFile]);
-    console.log("Initial files set:", [currentFile]);
   }, []);
 
   useEffect(() => {
-    console.log("Current file updated:", currentFile);
     currentFileIdRef.current = currentFile.id;
   }, [currentFile]);
 
   const handleFileSelect = (file: FileItem) => {
-    console.log("File selected:", file);
     if (currentFile && !currentFile.isSaved) {
-      console.log("Current file not saved, opening dialog");
       setPendingFileSelect(file);
       setIsDialogOpen(true);
     } else {
-      console.log("Setting current file:", file);
       setCurrentFile(file);
-      // Force update
-      setFiles(prevFiles => [...prevFiles]);
+      setFiles((prevFiles) => [...prevFiles]);
     }
   };
 
   const handleDialogConfirm = () => {
-    console.log("Dialog confirmed, saving current file");
     handleSave();
     if (pendingFileSelect) {
-      console.log("Setting current file to pending select:", pendingFileSelect);
       setCurrentFile(pendingFileSelect);
       setPendingFileSelect(null);
     }
@@ -66,9 +64,7 @@ const CarbonPaper: React.FC = () => {
   };
 
   const handleDialogCancel = () => {
-    console.log("Dialog cancelled");
     if (pendingFileSelect) {
-      console.log("Setting current file to pending select:", pendingFileSelect);
       setCurrentFile(pendingFileSelect);
       setPendingFileSelect(null);
     }
@@ -76,103 +72,72 @@ const CarbonPaper: React.FC = () => {
   };
 
   const handleFileRename = (fileId: string, newName: string) => {
-    console.log(`Renaming file with id ${fileId} to ${newName}`);
     setFiles((prevFiles) => {
       const newFiles = prevFiles.map((file) =>
-        file.id === fileId
-          ? { ...file, name: newName, isSaved: false }
-          : file
+        file.id === fileId ? { ...file, name: newName, isSaved: false } : file
       );
-      console.log("Updated files after rename:", newFiles);
       return newFiles;
     });
     if (currentFile.id === fileId) {
-      console.log("Updating current file name");
-      setCurrentFile((prevFile) => ({ ...prevFile, name: newName, isSaved: false }));
+      setCurrentFile((prevFile) => ({
+        ...prevFile,
+        name: newName,
+        isSaved: false,
+      }));
     }
   };
 
-  const handleContentChange = useCallback(
-    (newContent: string) => {
-      console.log("Content changed for file:", currentFile.name, "with id:", currentFileIdRef.current);
-      setCurrentFile((prevFile) => {
-        const updatedFile = { ...prevFile, content: newContent, isSaved: false };
-        console.log("Updated current file:", updatedFile);
-        return updatedFile;
-      });
-      setFiles((prevFiles) => {
-        const newFiles = prevFiles.map((file) =>
-          file.id === currentFileIdRef.current
-            ? { ...file, content: newContent, isSaved: false }
-            : file
-        );
-        console.log("Updated files after content change:", newFiles);
-        return newFiles;
-      });
-    },
-    []
-  );
+  const handleContentChange = useCallback((newContent: string) => {
+    setCurrentFile((prevFile) => {
+      const updatedFile = { ...prevFile, content: newContent, isSaved: false };
+      return updatedFile;
+    });
+    setFiles((prevFiles) => {
+      const newFiles = prevFiles.map((file) =>
+        file.id === currentFileIdRef.current
+          ? { ...file, content: newContent, isSaved: false }
+          : file
+      );
+      return newFiles;
+    });
+  }, []);
 
   const handleSave = useCallback(() => {
-    console.log("Saving file:", currentFile.name, "with id:", currentFileIdRef.current);
     setCurrentFile((prevFile) => {
       const updatedFile = { ...prevFile, isSaved: true };
-      console.log("Updated current file after save:", updatedFile);
       return updatedFile;
     });
     setFiles((prevFiles) => {
       const newFiles = prevFiles.map((file) =>
         file.id === currentFileIdRef.current ? { ...file, isSaved: true } : file
       );
-      console.log("Updated files after save:", newFiles);
       return newFiles;
     });
   }, []);
 
   const handleFileAdd = (file: FileItem) => {
-    console.log("Adding new file:", file);
     const newFile = { ...file, id: Date.now().toString(), isSaved: true };
-    setFiles((prevFiles) => {
-      const newFiles = [...prevFiles, newFile];
-      console.log("Updated files after add:", newFiles);
-      return newFiles;
-    });
-    console.log("Setting current file to new file:", newFile);
+    setFiles((prevFiles) => [...prevFiles, newFile]);
     setCurrentFile(newFile);
-    // Force update
-    setFiles(prevFiles => [...prevFiles]);
   };
 
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (files.some(file => !file.isSaved)) {
-        e.preventDefault();
-        e.returnValue = "";
+  const handleFileDelete = (fileId: string) => {
+    setFiles((prevFiles) => prevFiles.filter((file) => file.id !== fileId));
+    if (currentFile.id === fileId) {
+      const remainingFiles = files.filter((file) => file.id !== fileId);
+      if (remainingFiles.length > 0) {
+        setCurrentFile(remainingFiles[0]);
+      } else {
+        setCurrentFile({
+          id: "default",
+          name: "Untitled",
+          content:
+            "<h1>Welcome to CarbonPaper</h1><p>Start crafting your document...</p>",
+          isSaved: true,
+        });
       }
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [files]);
-
-  // Add event listener for Cmd+S / Ctrl+S
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === 's') {
-        event.preventDefault();
-        event.stopPropagation();
-        handleSave();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown, { capture: true });
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown, { capture: true });
-    };
-  }, [handleSave]);
-
-  console.log("Current render state - currentFile:", currentFile, "files:", files);
+    }
+  };
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -186,9 +151,25 @@ const CarbonPaper: React.FC = () => {
           >
             <PanelLeft className="h-5 w-5" />
           </Button>
-          <h2 className="text-xl font-semibold text-gray-800">
-            {currentFile?.name || "Untitled"}
-          </h2>
+          {isEditingFileName ? (
+            <Input
+              value={currentFile.name}
+              onChange={(e) => handleFileRename(currentFile.id, e.target.value)}
+              onBlur={() => setIsEditingFileName(false)}
+              onKeyPress={(e) =>
+                e.key === "Enter" && setIsEditingFileName(false)
+              }
+              autoFocus
+              className="text-xl font-semibold text-gray-800 w-64"
+            />
+          ) : (
+            <h2
+              className="text-xl font-semibold text-gray-800 cursor-pointer"
+              onClick={() => setIsEditingFileName(true)}
+            >
+              {currentFile?.name || "Untitled"}
+            </h2>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -218,28 +199,54 @@ const CarbonPaper: React.FC = () => {
         </Button>
       </div>
       <div className="flex flex-grow overflow-hidden">
-        <FileExplorer
-          isOpen={isFileExplorerOpen}
-          files={files}
-          onFileSelect={handleFileSelect}
-          onFileRename={handleFileRename}
-          onFileAdd={handleFileAdd}
-          currentFileId={currentFile.id}
-        />
+      <AnimatePresence>
+  {isFileExplorerOpen && (
+    <motion.div
+      initial={{ width: 0, x: -300 }} // Start with no width and off-screen
+      animate={{ width: "auto", x: 0 }} // Animate to visible width and position
+      exit={{ width: 0, x: -300 }} // Shrink and slide out
+      transition={{ duration: 0.3 }} // Smooth transition
+    >
+      <FileExplorer
+        isOpen={isFileExplorerOpen}
+        files={files}
+        onFileSelect={handleFileSelect}
+        onFileRename={handleFileRename}
+        onFileAdd={handleFileAdd}
+        onFileDelete={handleFileDelete}
+        currentFileId={currentFile.id}
+      />
+    </motion.div>
+  )}
+</AnimatePresence>
+
+
         <div className="flex-grow">
           <Editor
             currentFile={currentFile}
             onContentChange={handleContentChange}
           />
         </div>
-        <AIChat isOpen={isAIChatOpen} />
+        <AnimatePresence>
+          {isAIChatOpen && (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: "auto", opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <AIChat isOpen={isAIChatOpen} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Unsaved Changes</DialogTitle>
             <DialogDescription>
-              You have unsaved changes. Do you want to save before switching files?
+              You have unsaved changes. Do you want to save before switching
+              files?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
