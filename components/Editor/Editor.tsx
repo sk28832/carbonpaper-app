@@ -3,13 +3,22 @@ import React, { useRef, useEffect, useCallback } from "react";
 import Toolbar from "./Toolbar";
 import { useEditorState } from "./useEditorState";
 
-interface EditorProps {
-  currentFile: { name: string; content: string } | null;
-  onContentChange: (content: string) => void;
-  onBlur: () => void;
+interface FileItem {
+  id: string;
+  name: string;
+  content: string;
+  isSaved: boolean;
 }
 
-const Editor: React.FC<EditorProps> = ({ currentFile, onContentChange, onBlur }) => {
+interface EditorProps {
+  currentFile: FileItem;
+  onContentChange: (content: string) => void;
+}
+
+const Editor: React.FC<EditorProps> = ({
+  currentFile,
+  onContentChange,
+}) => {
   const {
     html,
     setHtml,
@@ -40,10 +49,8 @@ const Editor: React.FC<EditorProps> = ({ currentFile, onContentChange, onBlur })
   }, [html]);
 
   useEffect(() => {
-    if (currentFile) {
-      setHtml(currentFile.content);
-    }
-  }, [currentFile]);
+    setHtml(currentFile.content);
+  }, [currentFile.id, currentFile.content]);
 
   const initializeIframe = () => {
     if (iframeRef.current) {
@@ -99,7 +106,7 @@ const Editor: React.FC<EditorProps> = ({ currentFile, onContentChange, onBlur })
         `);
         doc.close();
         attachIframeListeners(doc);
-        doc.querySelector('.page')!.innerHTML = html || "<h1>Welcome to CarbonPaper</h1><p>Start crafting your document...</p>";
+        doc.querySelector(".page")!.innerHTML = html || "";
       }
     }
   };
@@ -107,7 +114,7 @@ const Editor: React.FC<EditorProps> = ({ currentFile, onContentChange, onBlur })
   const updateIframeContent = () => {
     if (iframeRef.current) {
       const doc = iframeRef.current.contentDocument;
-      if (doc && doc.querySelector('.page')!.innerHTML !== html) {
+      if (doc && doc.querySelector(".page")!.innerHTML !== html) {
         const selection = doc.getSelection();
         let range: Range | null = null;
         let startContainer: Node | null = null;
@@ -119,7 +126,7 @@ const Editor: React.FC<EditorProps> = ({ currentFile, onContentChange, onBlur })
           startOffset = range.startOffset;
         }
 
-        doc.querySelector('.page')!.innerHTML = html;
+        doc.querySelector(".page")!.innerHTML = html;
 
         if (range && startContainer) {
           const newRange = doc.createRange();
@@ -143,81 +150,101 @@ const Editor: React.FC<EditorProps> = ({ currentFile, onContentChange, onBlur })
 
   const attachIframeListeners = (doc: Document) => {
     const updateHtml = () => {
-      const content = doc.querySelector('.page')!.innerHTML;
+      const content = doc.querySelector(".page")!.innerHTML;
       if (content !== html) {
         setHtml(content);
         onContentChange(content);
       }
     };
-    doc.querySelector('.page')!.addEventListener("input", updateHtml);
-    doc.querySelector('.page')!.addEventListener("blur", () => {
-      updateHtml();
-      onBlur();
-    });
+    doc.querySelector(".page")!.addEventListener("input", updateHtml);
   };
 
-  const applyFormatting = useCallback((command: string, value: string = "") => {
-    if (iframeRef.current) {
-      const doc = iframeRef.current.contentDocument;
-      if (doc) {
-        doc.execCommand('styleWithCSS', false, 'true');
-        doc.execCommand(command, false, value);
-        setHtml(doc.querySelector('.page')!.innerHTML);
-        onContentChange(doc.querySelector('.page')!.innerHTML);
+  const applyFormatting = useCallback(
+    (command: string, value: string = "") => {
+      if (iframeRef.current) {
+        const doc = iframeRef.current.contentDocument;
+        if (doc) {
+          doc.execCommand("styleWithCSS", false, "true");
+          doc.execCommand(command, false, value);
+          const newContent = doc.querySelector(".page")!.innerHTML;
+          setHtml(newContent);
+          onContentChange(newContent);
 
-        // Update current styles
-        const selection = doc.getSelection();
-        if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          const span = doc.createElement('span');
-          range.surroundContents(span);
-          
-          if (command === 'fontName') {
-            setCurrentFont(window.getComputedStyle(span).fontFamily.split(',')[0].replace(/['"]+/g, ''));
-          } else if (command === 'fontSize') {
-            setCurrentSize(value);
-          } else if (command === 'foreColor') {
-            setCurrentColor(value);
-          } else if (command === 'hiliteColor') {
-            setCurrentHighlight(value === 'transparent' ? 'none' : value);
+          // Update current styles
+          const selection = doc.getSelection();
+          if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const span = doc.createElement("span");
+            range.surroundContents(span);
+
+            if (command === "fontName") {
+              setCurrentFont(
+                window
+                  .getComputedStyle(span)
+                  .fontFamily.split(",")[0]
+                  .replace(/['"]+/g, "")
+              );
+            } else if (command === "fontSize") {
+              setCurrentSize(value);
+            } else if (command === "foreColor") {
+              setCurrentColor(value);
+            } else if (command === "hiliteColor") {
+              setCurrentHighlight(value === "transparent" ? "none" : value);
+            }
+
+            range.extractContents();
+            range.insertNode(span.firstChild!);
           }
 
-          range.extractContents();
-          range.insertNode(span.firstChild!);
+          // Restore focus to the iframe
+          iframeRef.current.focus();
+          (doc.querySelector(".page") as HTMLElement).focus();
         }
-
-        // Restore focus to the iframe
-        iframeRef.current.focus();
-        (doc.querySelector('.page') as HTMLElement).focus();
       }
-    }
-  }, [setHtml, setCurrentFont, setCurrentSize, setCurrentColor, setCurrentHighlight, onContentChange]);
+    },
+    [
+      setHtml,
+      setCurrentFont,
+      setCurrentSize,
+      setCurrentColor,
+      setCurrentHighlight,
+      onContentChange,
+    ]
+  );
 
   const clearFormatting = useCallback(() => {
     if (iframeRef.current) {
       const doc = iframeRef.current.contentDocument;
       if (doc) {
-        doc.execCommand('removeFormat', false, '');
-        setHtml(doc.querySelector('.page')!.innerHTML);
-        onContentChange(doc.querySelector('.page')!.innerHTML);
-        setCurrentFont('Arial');
-        setCurrentSize('3');
-        setCurrentColor('black');
-        setCurrentHighlight('none');
-        
+        doc.execCommand("removeFormat", false, "");
+        const newContent = doc.querySelector(".page")!.innerHTML;
+        setHtml(newContent);
+        onContentChange(newContent);
+        setCurrentFont("Arial");
+        setCurrentSize("3");
+        setCurrentColor("black");
+        setCurrentHighlight("none");
+
         // Restore focus to the iframe
         iframeRef.current.focus();
-        (doc.querySelector('.page') as HTMLElement).focus();
+        (doc.querySelector(".page") as HTMLElement).focus();
       }
     }
-  }, [setHtml, setCurrentFont, setCurrentSize, setCurrentColor, setCurrentHighlight, onContentChange]);
+  }, [
+    setHtml,
+    setCurrentFont,
+    setCurrentSize,
+    setCurrentColor,
+    setCurrentHighlight,
+    onContentChange,
+  ]);
 
   const refocusEditor = useCallback(() => {
     if (iframeRef.current) {
       const doc = iframeRef.current.contentDocument;
       if (doc) {
         iframeRef.current.focus();
-        (doc.querySelector('.page') as HTMLElement).focus();
+        (doc.querySelector(".page") as HTMLElement).focus();
       }
     }
   }, []);
