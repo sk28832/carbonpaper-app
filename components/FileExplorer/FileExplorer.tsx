@@ -1,3 +1,4 @@
+// File: components/FileExplorer/FileExplorer
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -31,6 +32,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FileItem } from "@/types/fileTypes";
 import { toast } from "@/hooks/use-toast";
+import SkeletonCard from "./SkeletonCard";
+import useDelayedState from "@/hooks/useDelayedState"
+import { motion, AnimatePresence } from "framer-motion";
 
 const HTMLPreview: React.FC<{ content: string }> = ({ content }) => {
   return (
@@ -53,12 +57,14 @@ const FileExplorer: React.FC = () => {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isNewFileDialogOpen, setIsNewFileDialogOpen] = useState(false);
   const [newFileNameInput, setNewFileNameInput] = useState("");
+  const [isLoading, setIsLoading] = useDelayedState(true, 1000); // Minimum 1 second loading time
 
   useEffect(() => {
     fetchFiles();
   }, []);
 
   const fetchFiles = async () => {
+    setIsLoading(true);
     try {
       const response = await fetch("/api/files");
       if (response.ok) {
@@ -74,6 +80,8 @@ const FileExplorer: React.FC = () => {
         description: "Failed to load files. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -289,86 +297,101 @@ const FileExplorer: React.FC = () => {
         </div>
       </div>
 
-      <div
-        className={`grid gap-4 ${
-          viewMode === "grid"
-            ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-            : "grid-cols-1"
-        }`}
-      >
-        {files.map((file) => (
-          <Card
-            key={file.id}
-            className="cursor-pointer"
-            onClick={() => handleFileSelect(file)}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={isLoading ? 'loading' : 'content'}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div
+            className={`grid gap-4 ${
+              viewMode === "grid"
+                ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                : "grid-cols-1"
+            }`}
           >
-            <CardContent className="p-4">
-              {viewMode === "grid" && (
-                <div className="aspect-video mb-2 bg-muted flex items-center justify-center overflow-hidden">
-                  <HTMLPreview content={file.content} />
-                </div>
-              )}
-              <div className="flex items-center justify-between">
-                {editingFile === file.id ? (
-                  <Input
-                    value={newFileName}
-                    onChange={(e) => setNewFileName(e.target.value)}
-                    onBlur={handleRename}
-                    onKeyPress={(e) => e.key === "Enter" && handleRename()}
-                    autoFocus
-                    className="text-sm"
-                  />
-                ) : (
-                  <span className="text-sm font-medium truncate">
-                    {file.name}
-                  </span>
-                )}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        startRenaming(file.id, file.name);
-                      }}
-                    >
-                      <Edit2 className="h-4 w-4 mr-2" /> Rename
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleFileExport(file);
-                      }}
-                    >
-                      <Download className="h-4 w-4 mr-2" /> Export
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleFileDelete(file.id);
-                      }}
-                      className="text-red-500"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" /> Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              {!file.isSaved && (
-                <span className="text-xs text-yellow-500">Unsaved changes</span>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            {isLoading
+              ? Array.from({ length: 8 }).map((_, index) => (
+                  <SkeletonCard key={index} viewMode={viewMode} />
+                ))
+              : files.map((file) => (
+                  <Card
+                    key={file.id}
+                    className="cursor-pointer transition-opacity duration-300"
+                    onClick={() => handleFileSelect(file)}
+                  >
+                    <CardContent className="p-4">
+                      {viewMode === "grid" && (
+                        <div className="aspect-video mb-2 bg-muted flex items-center justify-center overflow-hidden">
+                          <HTMLPreview content={file.content} />
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between">
+                        {editingFile === file.id ? (
+                          <Input
+                            value={newFileName}
+                            onChange={(e) => setNewFileName(e.target.value)}
+                            onBlur={handleRename}
+                            onKeyPress={(e) => e.key === "Enter" && handleRename()}
+                            autoFocus
+                            className="text-sm"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium truncate">
+                            {file.name}
+                          </span>
+                        )}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startRenaming(file.id, file.name);
+                              }}
+                            >
+                              <Edit2 className="h-4 w-4 mr-2" /> Rename
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleFileExport(file);
+                              }}
+                            >
+                              <Download className="h-4 w-4 mr-2" /> Export
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleFileDelete(file.id);
+                              }}
+                              className="text-red-500"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      {!file.isSaved && (
+                        <span className="text-xs text-yellow-500">Unsaved changes</span>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+          </div>
+        </motion.div>
+      </AnimatePresence>
+
       <Dialog open={isNewFileDialogOpen} onOpenChange={setIsNewFileDialogOpen}>
         <DialogContent>
           <DialogHeader>
