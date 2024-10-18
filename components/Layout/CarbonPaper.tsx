@@ -155,47 +155,66 @@ const CarbonPaper: React.FC = () => {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [files]);
 
+  // Add event listener for Cmd+S / Ctrl+S
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 's') {
+        event.preventDefault();
+        event.stopPropagation();
+        handleSave();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown, { capture: true });
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, { capture: true });
+    };
+  }, [handleSave]);
+
   console.log("Current render state - currentFile:", currentFile, "files:", files);
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
-      <div className="flex items-center justify-between bg-white border-b border-gray-200 p-2">
-        <div className="flex items-center">
+    <div className="flex flex-col h-screen bg-gray-50">
+      <div className="flex items-center justify-between bg-white border-b border-gray-200 p-3 shadow-sm">
+        <div className="flex items-center space-x-4">
           <Button
             variant="ghost"
-            size="icon"
+            size="sm"
             onClick={() => setIsFileExplorerOpen(!isFileExplorerOpen)}
-            className="mr-2"
+            className="text-gray-600 hover:text-gray-900"
           >
-            <PanelLeft className="h-4 w-4" />
+            <PanelLeft className="h-5 w-5" />
           </Button>
-          <h2 className="text-xl font-semibold mr-2">
+          <h2 className="text-xl font-semibold text-gray-800">
             {currentFile?.name || "Untitled"}
           </h2>
           <Button
             variant="ghost"
-            size="icon"
+            size="sm"
             onClick={handleSave}
             disabled={currentFile.isSaved}
+            className="text-gray-600 hover:text-gray-900"
           >
-            <Save className="h-4 w-4" />
+            <Save className="h-5 w-5" />
           </Button>
-          {currentFile.isSaved && (
-            <span className="text-green-500 ml-2 flex items-center">
-              <Check className="h-4 w-4 mr-1" />
+          {currentFile.isSaved ? (
+            <span className="text-green-500 text-sm flex items-center">
               Saved
             </span>
-          )}
-          {!currentFile.isSaved && (
-            <span className="text-yellow-500 ml-2">Not saved</span>
+          ) : (
+            <span className="text-yellow-500 text-sm flex items-center">
+              Unsaved
+            </span>
           )}
         </div>
         <Button
           variant="ghost"
-          size="icon"
+          size="sm"
           onClick={() => setIsAIChatOpen(!isAIChatOpen)}
+          className="text-gray-600 hover:text-gray-900"
         >
-          <BotIcon className="h-4 w-4" />
+          <BotIcon className="h-5 w-5" />
         </Button>
       </div>
       <div className="flex flex-grow overflow-hidden">

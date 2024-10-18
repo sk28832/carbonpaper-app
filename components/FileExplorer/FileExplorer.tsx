@@ -1,6 +1,6 @@
 // File: components/FileExplorer/FileExplorer.tsx
 import React, { useState } from "react";
-import { Upload, Download, MoreVertical, Edit2 } from "lucide-react";
+import { Upload, Download, MoreVertical, Edit2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -77,13 +77,14 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="w-64 h-full bg-gray-50 border-r border-gray-200 overflow-auto">
+    <div className="w-64 h-full bg-white border-r border-gray-200 overflow-auto">
       <div className="p-4">
         <div className="flex space-x-2 mb-4">
           <Button
             variant="outline"
             size="sm"
             onClick={() => document.getElementById("fileInput")?.click()}
+            className="w-full"
           >
             <Upload className="h-4 w-4 mr-2" />
             Import
@@ -95,17 +96,26 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
             onChange={handleFileUpload}
             className="hidden"
           />
-          <Button variant="outline" size="sm" onClick={handleFileExport}>
+          <Button variant="outline" size="sm" onClick={handleFileExport} className="w-full">
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
         </div>
+        <Button
+          variant="default"
+          size="sm"
+          onClick={() => onFileAdd({ id: Date.now().toString(), name: "New File", content: "", isSaved: false })}
+          className="w-full mb-4"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          New File
+        </Button>
         <ul className="space-y-2">
           {files.map((file) => (
             <li
               key={file.id}
-              className={`flex items-center justify-between bg-white p-2 rounded-md shadow-sm ${
-                file.id === currentFileId ? 'border-2 border-blue-500' : ''
+              className={`flex items-center justify-between bg-gray-50 p-2 rounded-md ${
+                file.id === currentFileId ? 'border-2 border-blue-500' : 'border border-gray-200'
               }`}
             >
               {editingFile === file.id ? (
@@ -115,10 +125,11 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                   onBlur={handleRename}
                   onKeyPress={(e) => e.key === "Enter" && handleRename()}
                   autoFocus
+                  className="text-sm"
                 />
               ) : (
                 <span
-                  className="cursor-pointer truncate flex-grow"
+                  className="cursor-pointer truncate flex-grow text-sm text-gray-800"
                   onClick={() => onFileSelect(file)}
                 >
                   {file.name}{" "}

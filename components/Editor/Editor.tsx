@@ -292,7 +292,7 @@ const Editor: React.FC<EditorProps> = ({
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-gray-200">
+    <div className="flex flex-col h-full bg-gray-50">
       <Toolbar
         currentFont={currentFont}
         setCurrentFont={setCurrentFont}
@@ -314,10 +314,10 @@ const Editor: React.FC<EditorProps> = ({
         clearFormatting={clearFormatting}
         refocusEditor={refocusEditor}
       />
-      <div className="flex-grow overflow-auto">
+      <div className="flex-grow overflow-auto p-4">
         <iframe
           ref={iframeRef}
-          className="w-full h-full border-none focus:outline-none"
+          className="w-full h-full border border-gray-200 rounded-lg shadow-sm focus:outline-none bg-white"
           title="CarbonPaper Editor"
           sandbox="allow-same-origin allow-scripts"
         />
