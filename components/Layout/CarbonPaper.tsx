@@ -5,9 +5,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import FileExplorer from "../FileExplorer/FileExplorer";
 import Editor from "../Editor/Editor";
 import AIChat from "../AIChat/AIChat";
-import { PanelLeft, BotIcon, Save, X } from "lucide-react";
+import { PanelLeft, BotIcon, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -179,15 +180,14 @@ const CarbonPaper: React.FC = () => {
           >
             <Save className="h-5 w-5" />
           </Button>
-          {currentFile.isSaved ? (
-            <span className="text-green-500 text-sm flex items-center">
-              Saved
-            </span>
-          ) : (
-            <span className="text-yellow-500 text-sm flex items-center">
-              Unsaved
-            </span>
-          )}
+          <Badge 
+            variant={currentFile.isSaved ? "secondary" : "outline"} 
+            className={`text-xs px-2 py-1 transition-all duration-300 ${
+              currentFile.isSaved ? 'bg-gray-200 text-gray-700' : 'bg-white text-gray-500 border-gray-300'
+            }`}
+          >
+            {currentFile.isSaved ? "Saved" : "Unsaved"}
+          </Badge>
         </div>
         <Button
           variant="ghost"
@@ -202,10 +202,10 @@ const CarbonPaper: React.FC = () => {
       <AnimatePresence>
   {isFileExplorerOpen && (
     <motion.div
-      initial={{ width: 0, x: -300 }} // Start with no width and off-screen
-      animate={{ width: "auto", x: 0 }} // Animate to visible width and position
-      exit={{ width: 0, x: -300 }} // Shrink and slide out
-      transition={{ duration: 0.3 }} // Smooth transition
+      initial={{ width: 0, x: -300 }}
+      animate={{ width: "auto", x: 0 }} 
+      exit={{ width: 0, x: -300 }} 
+      transition={{ duration: 0.3 }} 
     >
       <FileExplorer
         isOpen={isFileExplorerOpen}
