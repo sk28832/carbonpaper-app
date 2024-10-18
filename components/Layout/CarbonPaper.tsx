@@ -11,6 +11,7 @@ import { ArrowLeft, Save, MessageSquare, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { FileItem } from "@/types/fileTypes";
 
 interface CarbonPaperProps {
@@ -21,10 +22,12 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   const router = useRouter();
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [currentFile, setCurrentFile] = useState<FileItem | null>(null);
-  const [aiChatWidth, setAiChatWidth] = useState(400); // Default width for desktop
+  const [aiChatWidth, setAiChatWidth] = useState(400);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchFile = async () => {
+      setIsLoading(true);
       try {
         const response = await fetch(`/api/files/${fileId}`);
         if (response.ok) {
@@ -37,6 +40,8 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
       } catch (error) {
         console.error("Error fetching file:", error);
         router.push("/");
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -108,8 +113,29 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
     [currentFile]
   );
 
+  const LoadingSkeleton = () => (
+    <div className="flex flex-col h-screen bg-gray-50">
+      <div className="flex items-center justify-between bg-white border-b border-gray-200 p-3 shadow-sm">
+        <div className="flex items-center space-x-4">
+          <Skeleton className="h-8 w-8 rounded" />
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-8 w-8 rounded" />
+          <Skeleton className="h-6 w-16 rounded-full" />
+        </div>
+        <Skeleton className="h-8 w-24" />
+      </div>
+      <div className="flex-grow p-4">
+        <Skeleton className="h-full w-full" />
+      </div>
+    </div>
+  );
+
+  if (isLoading) {
+    return <LoadingSkeleton />;
+  }
+
   if (!currentFile) {
-    return <div>Loading...</div>;
+    return <div>File not found</div>;
   }
 
   return (
