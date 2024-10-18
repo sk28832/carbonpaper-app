@@ -1,4 +1,5 @@
 // File: components/AIChat/AIChat.tsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,10 +8,11 @@ import { Input } from '@/components/ui/input';
 interface AIChatProps {
   isOpen: boolean;
   editorContent: string;
+  chatMessages: { text: string; isUser: boolean }[];
+  onAddMessage: (message: { text: string; isUser: boolean }) => void;
 }
 
-const AIChat: React.FC<AIChatProps> = ({ isOpen, editorContent }) => {
-  const [messages, setMessages] = useState<{ text: string; isUser: boolean }[]>([]);
+const AIChat: React.FC<AIChatProps> = ({ isOpen, editorContent, chatMessages, onAddMessage }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -18,11 +20,12 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, editorContent }) => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages]);
+  }, [chatMessages]);
 
   const handleSend = () => {
     if (input.trim()) {
-      setMessages([...messages, { text: input, isUser: true }]);
+      const userMessage = { text: input, isUser: true };
+      onAddMessage(userMessage);
       generateAIResponse(input);
       setInput('');
     }
@@ -32,19 +35,21 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, editorContent }) => {
     setTimeout(() => {
       let aiResponse = '';
       const trimmedContent = editorContent.trim();
-      console.log(trimmedContent)
+      console.log(trimmedContent);
 
-      aiResponse = trimmedContent
+      aiResponse = trimmedContent;
 
-      setMessages(prev => [...prev, { text: aiResponse, isUser: false }]);
+      const aiMessage = { text: aiResponse, isUser: false };
+      onAddMessage(aiMessage);
     }, 1000);
   };
 
+  if (!isOpen) return null;
 
   return (
     <div className="w-full h-full bg-white flex flex-col">
       <div className="flex-grow overflow-auto p-4 space-y-4">
-        {messages.map((message, index) => (
+        {chatMessages.map((message, index) => (
           <div key={index} className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[80%] p-2 rounded-lg ${message.isUser ? 'bg-black text-white' : 'bg-gray-200'}`}>
               {message.text}

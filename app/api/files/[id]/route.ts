@@ -1,7 +1,7 @@
 // File: app/api/files/[id]/route.ts
 
 import { NextResponse } from 'next/server';
-import { getFile, updateFile, deleteFile } from '@/lib/mockDb';
+import { getFile, updateFile, deleteFile, addChatMessage } from '@/lib/mockDb';
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const file = getFile(params.id);
@@ -22,11 +22,13 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   const data = await request.json();
   const existingFile = getFile(params.id);
-  const updatedFile = existingFile 
-    ? { ...existingFile, ...data }
-    : { ...data, id: params.id, isSaved: true };
-  updateFile(updatedFile);
-  return NextResponse.json(updatedFile);
+  if (existingFile) {
+    const updatedFile = { ...existingFile, ...data };
+    updateFile(updatedFile);
+    return NextResponse.json(updatedFile);
+  } else {
+    return NextResponse.json({ error: 'File not found' }, { status: 404 });
+  }
 }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
@@ -37,4 +39,11 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   } else {
     return NextResponse.json({ error: 'File not found' }, { status: 404 });
   }
+}
+
+// New route for adding chat messages
+export async function POST(request: Request, { params }: { params: { id: string } }) {
+  const data = await request.json();
+  addChatMessage(params.id, data);
+  return NextResponse.json({ message: 'Chat message added successfully' });
 }

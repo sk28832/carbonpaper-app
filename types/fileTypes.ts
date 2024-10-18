@@ -5,4 +5,5 @@ export interface FileItem {
   name: string;
   content: string;
   isSaved: boolean;
+  chatMessages: { text: string; isUser: boolean }[];
 }

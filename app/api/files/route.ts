@@ -12,6 +12,7 @@ export async function POST(request: Request) {
     name: data.name,
     content: data.content,
     isSaved: true,
+    chatMessages: []
   });
   return NextResponse.json(newFile, { status: 201 });
 }
