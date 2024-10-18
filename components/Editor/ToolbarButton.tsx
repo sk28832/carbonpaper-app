@@ -2,6 +2,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 interface ToolbarButtonProps {
   onClick: () => void;
@@ -16,9 +17,12 @@ export const ToolbarButton: React.FC<ToolbarButtonProps> = ({ onClick, icon, too
       <TooltipTrigger asChild>
         <Button 
           onClick={onClick} 
-          variant={active ? "default" : "ghost"} 
+          variant="ghost" 
           size="icon" 
-          className="h-8 w-8"
+          className={cn(
+            "h-8 w-8",
+            active && "bg-gray-200 hover:bg-gray-300"
+          )}
         >
           {icon}
         </Button>

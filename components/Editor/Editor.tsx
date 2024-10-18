@@ -28,6 +28,14 @@ const Editor: React.FC<EditorProps> = ({
     setColorOpen,
     highlightOpen,
     setHighlightOpen,
+    isBold,
+    setIsBold,
+    isItalic,
+    setIsItalic,
+    isUnderline,
+    setIsUnderline,
+    textAlign,
+    setTextAlign,
   } = useEditorState();
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -150,7 +158,29 @@ const Editor: React.FC<EditorProps> = ({
         onContentChange(content);
       }
     };
+
+    const updateFormatting = () => {
+      const selection = doc.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const parentElement = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+          ? range.commonAncestorContainer.parentElement
+          : range.commonAncestorContainer as HTMLElement;
+
+        if (parentElement) {
+          const computedStyle = window.getComputedStyle(parentElement);
+          setCurrentFont(computedStyle.fontFamily.split(',')[0].replace(/['"]+/g, ''));
+          setCurrentSize(Math.round(parseFloat(computedStyle.fontSize)).toString());
+          setIsBold(computedStyle.fontWeight === 'bold' || parseInt(computedStyle.fontWeight) >= 700);
+          setIsItalic(computedStyle.fontStyle === 'italic');
+          setIsUnderline(computedStyle.textDecoration.includes('underline'));
+          setTextAlign(computedStyle.textAlign as 'left' | 'center' | 'right' | 'justify');
+        }
+      }
+    };
+
     doc.querySelector(".page")!.addEventListener("input", updateHtml);
+    doc.addEventListener("selectionchange", updateFormatting);
   };
 
   const applyFormatting = useCallback(
@@ -159,7 +189,14 @@ const Editor: React.FC<EditorProps> = ({
         const doc = iframeRef.current.contentDocument;
         if (doc) {
           doc.execCommand("styleWithCSS", false, "true");
-          doc.execCommand(command, false, value);
+          
+          // Handle font size separately
+          if (command === "fontSize") {
+            doc.execCommand(command, false, (parseInt(value, 10) / 16).toString());
+          } else {
+            doc.execCommand(command, false, value);
+          }
+
           const newContent = doc.querySelector(".page")!.innerHTML;
           setHtml(newContent);
           onContentChange(newContent);
@@ -171,16 +208,15 @@ const Editor: React.FC<EditorProps> = ({
             const span = doc.createElement("span");
             range.surroundContents(span);
 
-            if (command === "fontName") {
-              setCurrentFont(
-                window
-                  .getComputedStyle(span)
-                  .fontFamily.split(",")[0]
-                  .replace(/['"]+/g, "")
-              );
-            } else if (command === "fontSize") {
-              setCurrentSize(value);
-            } else if (command === "foreColor") {
+            const computedStyle = window.getComputedStyle(span);
+            setCurrentFont(computedStyle.fontFamily.split(',')[0].replace(/['"]+/g, ''));
+            setCurrentSize(Math.round(parseFloat(computedStyle.fontSize)).toString());
+            setIsBold(computedStyle.fontWeight === 'bold' || parseInt(computedStyle.fontWeight) >= 700);
+            setIsItalic(computedStyle.fontStyle === 'italic');
+            setIsUnderline(computedStyle.textDecoration.includes('underline'));
+            setTextAlign(computedStyle.textAlign as 'left' | 'center' | 'right' | 'justify');
+
+            if (command === "foreColor") {
               setCurrentColor(value);
             } else if (command === "hiliteColor") {
               setCurrentHighlight(value === "transparent" ? "none" : value);
@@ -202,6 +238,10 @@ const Editor: React.FC<EditorProps> = ({
       setCurrentSize,
       setCurrentColor,
       setCurrentHighlight,
+      setIsBold,
+      setIsItalic,
+      setIsUnderline,
+      setTextAlign,
       onContentChange,
     ]
   );
@@ -215,9 +255,13 @@ const Editor: React.FC<EditorProps> = ({
         setHtml(newContent);
         onContentChange(newContent);
         setCurrentFont("Arial");
-        setCurrentSize("3");
+        setCurrentSize("16");
         setCurrentColor("black");
         setCurrentHighlight("none");
+        setIsBold(false);
+        setIsItalic(false);
+        setIsUnderline(false);
+        setTextAlign("left");
 
         // Restore focus to the iframe
         iframeRef.current.focus();
@@ -230,6 +274,10 @@ const Editor: React.FC<EditorProps> = ({
     setCurrentSize,
     setCurrentColor,
     setCurrentHighlight,
+    setIsBold,
+    setIsItalic,
+    setIsUnderline,
+    setTextAlign,
     onContentChange,
   ]);
 
@@ -258,6 +306,10 @@ const Editor: React.FC<EditorProps> = ({
         setColorOpen={setColorOpen}
         highlightOpen={highlightOpen}
         setHighlightOpen={setHighlightOpen}
+        isBold={isBold}
+        isItalic={isItalic}
+        isUnderline={isUnderline}
+        textAlign={textAlign}
         applyFormatting={applyFormatting}
         clearFormatting={clearFormatting}
         refocusEditor={refocusEditor}

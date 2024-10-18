@@ -20,6 +20,10 @@ interface ToolbarProps {
   setColorOpen: (open: boolean) => void;
   highlightOpen: boolean;
   setHighlightOpen: (open: boolean) => void;
+  isBold: boolean;
+  isItalic: boolean;
+  isUnderline: boolean;
+  textAlign: 'left' | 'center' | 'right' | 'justify';
   applyFormatting: (command: string, value?: string) => void;
   clearFormatting: () => void;
   refocusEditor: () => void;
@@ -38,6 +42,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
   setColorOpen,
   highlightOpen,
   setHighlightOpen,
+  isBold,
+  isItalic,
+  isUnderline,
+  textAlign,
   applyFormatting,
   clearFormatting,
   refocusEditor,
@@ -50,6 +58,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
   const handleButtonClick = (command: string, value?: string) => {
     applyFormatting(command, value);
     refocusEditor();
+  };
+
+  const handleFontSizeChange = (size: string) => {
+    const numericSize = parseInt(size, 10);
+    handleSelectChange("fontSize", numericSize.toString());
+    setCurrentSize(numericSize.toString());
   };
 
   return (
@@ -66,12 +80,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
         </SelectContent>
       </Select>
 
-      <Select value={currentSize} onValueChange={(value) => handleSelectChange("fontSize", value)}>
+      <Select value={currentSize} onValueChange={handleFontSizeChange}>
         <SelectTrigger className="w-[60px] h-8">
           <SelectValue>{currentSize}</SelectValue>
         </SelectTrigger>
         <SelectContent>
-          {[1, 2, 3, 4, 5, 6, 7].map((size) => (
+          {[8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72].map((size) => (
             <SelectItem key={size} value={size.toString()}>{size}</SelectItem>
           ))}
         </SelectContent>
@@ -79,9 +93,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
       <div className="h-6 w-px bg-gray-300 mx-1" />
 
-      <ToolbarButton onClick={() => handleButtonClick("bold")} icon={<Bold className="h-4 w-4" />} tooltip="Bold" />
-      <ToolbarButton onClick={() => handleButtonClick("italic")} icon={<Italic className="h-4 w-4" />} tooltip="Italic" />
-      <ToolbarButton onClick={() => handleButtonClick("underline")} icon={<Underline className="h-4 w-4" />} tooltip="Underline" />
+      <ToolbarButton onClick={() => handleButtonClick("bold")} icon={<Bold className="h-4 w-4" />} tooltip="Bold" active={isBold} />
+      <ToolbarButton onClick={() => handleButtonClick("italic")} icon={<Italic className="h-4 w-4" />} tooltip="Italic" active={isItalic} />
+      <ToolbarButton onClick={() => handleButtonClick("underline")} icon={<Underline className="h-4 w-4" />} tooltip="Underline" active={isUnderline} />
 
       <div className="h-6 w-px bg-gray-300 mx-1" />
 
@@ -125,10 +139,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
       <div className="h-6 w-px bg-gray-300 mx-1" />
 
-      <ToolbarButton onClick={() => handleButtonClick("justifyLeft")} icon={<AlignLeft className="h-4 w-4" />} tooltip="Align Left" />
-      <ToolbarButton onClick={() => handleButtonClick("justifyCenter")} icon={<AlignCenter className="h-4 w-4" />} tooltip="Align Center" />
-      <ToolbarButton onClick={() => handleButtonClick("justifyRight")} icon={<AlignRight className="h-4 w-4" />} tooltip="Align Right" />
-      <ToolbarButton onClick={() => handleButtonClick("justifyFull")} icon={<AlignJustify className="h-4 w-4" />} tooltip="Justify" />
+      <ToolbarButton onClick={() => handleButtonClick("justifyLeft")} icon={<AlignLeft className="h-4 w-4" />} tooltip="Align Left" active={textAlign === 'left'} />
+      <ToolbarButton onClick={() => handleButtonClick("justifyCenter")} icon={<AlignCenter className="h-4 w-4" />} tooltip="Align Center" active={textAlign === 'center'} />
+      <ToolbarButton onClick={() => handleButtonClick("justifyRight")} icon={<AlignRight className="h-4 w-4" />} tooltip="Align Right" active={textAlign === 'right'} />
+      <ToolbarButton onClick={() => handleButtonClick("justifyFull")} icon={<AlignJustify className="h-4 w-4" />} tooltip="Justify" active={textAlign === 'justify'} />
 
       <div className="h-6 w-px bg-gray-300 mx-1" />
 
