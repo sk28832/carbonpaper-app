@@ -14,13 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-interface FileItem {
-  id: string;
-  name: string;
-  content: string;
-  isSaved: boolean;
-}
+import { FileItem } from "@/types/fileTypes";
 
 const CarbonPaper: React.FC = () => {
   const [isFileExplorerOpen, setIsFileExplorerOpen] = useState(true);

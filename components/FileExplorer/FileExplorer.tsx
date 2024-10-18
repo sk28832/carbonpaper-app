@@ -9,13 +9,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FileItem } from "@/types/fileTypes";
 
-interface FileItem {
-  id: string;
-  name: string;
-  content: string;
-  isSaved: boolean;
-}
 
 interface FileExplorerProps {
   isOpen: boolean;

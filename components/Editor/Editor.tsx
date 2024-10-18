@@ -2,13 +2,7 @@
 import React, { useRef, useEffect, useCallback } from "react";
 import Toolbar from "./Toolbar";
 import { useEditorState } from "./useEditorState";
-
-interface FileItem {
-  id: string;
-  name: string;
-  content: string;
-  isSaved: boolean;
-}
+import { FileItem } from "@/types/fileTypes";
 
 interface EditorProps {
   currentFile: FileItem;
