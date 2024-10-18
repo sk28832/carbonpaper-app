@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileItem } from "@/types/fileTypes";
-import useDelayedState from "@/hooks/useDelayedState"
+import useDelayedState from "@/hooks/useDelayedState";
 
 interface CarbonPaperProps {
   fileId: string;
@@ -24,7 +24,9 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [currentFile, setCurrentFile] = useState<FileItem | null>(null);
   const [aiChatWidth, setAiChatWidth] = useState(400);
-  const [isLoading, setIsLoading] = useDelayedState(true, 1000); // Minimum 1 second loading time
+  const [isLoading, setIsLoading] = useDelayedState(true, 1000);
+  const [editorContent, setEditorContent] = useState("");
+  const [editorTextContent, setEditorTextContent] = useState("");
 
   useEffect(() => {
     const fetchFile = async () => {
@@ -34,6 +36,8 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
         if (response.ok) {
           const file = await response.json();
           setCurrentFile(file);
+          setEditorContent(file.content);
+          setEditorTextContent(extractTextFromHtml(file.content));
         } else {
           console.error("Failed to fetch file");
           router.push("/");
@@ -49,6 +53,11 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
     fetchFile();
   }, [fileId, router]);
 
+  const extractTextFromHtml = (html: string): string => {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return doc.body.textContent || "";
+  };
+
   const handleContentChange = useCallback(
     (newContent: string) => {
       if (currentFile) {
@@ -57,6 +66,8 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           content: newContent,
           isSaved: false,
         }));
+        setEditorContent(newContent);
+        setEditorTextContent(extractTextFromHtml(newContent));
       }
     },
     [currentFile]
@@ -202,7 +213,6 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
               <AnimatePresence>
                 {isAIChatOpen && (
                   <>
-                    {/* Mobile full-screen overlay */}
                     <motion.div
                       className="fixed inset-0 bg-white z-50 lg:hidden flex flex-col"
                       initial={{ opacity: 0, x: "100%" }}
@@ -221,11 +231,10 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
                         </Button>
                       </div>
                       <div className="flex-grow overflow-y-auto">
-                        <AIChat isOpen={isAIChatOpen} />
+                        <AIChat isOpen={isAIChatOpen} editorContent={editorTextContent} />
                       </div>
                     </motion.div>
 
-                    {/* Desktop Resizable AI Chat */}
                     <motion.div
                       className="hidden lg:block h-full"
                       initial={{ width: 0, opacity: 0 }}
@@ -243,7 +252,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
                         maxWidth={800}
                         className="border-l border-gray-200"
                       >
-                        <AIChat isOpen={isAIChatOpen} />
+                        <AIChat isOpen={isAIChatOpen} editorContent={editorTextContent} />
                       </Resizable>
                     </motion.div>
                   </>
