@@ -67,7 +67,7 @@ const Editor: React.FC<EditorProps> = ({
                   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                   color: #333;
                   line-height: 1.6;
-                  background-color: #e0e0e0;
+                  background-color: #f0f0f0;
                   margin: 0;
                   padding: 0;
                   display: flex;
