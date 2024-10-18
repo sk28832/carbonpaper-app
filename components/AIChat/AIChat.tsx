@@ -1,4 +1,3 @@
-// File: components/AIChat/AIChat.tsx
 import React, { useState } from 'react';
 import { Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';

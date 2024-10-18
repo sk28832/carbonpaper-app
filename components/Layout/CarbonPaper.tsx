@@ -1,144 +1,106 @@
-// File: components/Layout/CarbonPaper.tsx
-"use client";
-import React, { useState, useCallback, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import FileExplorer from "../FileExplorer/FileExplorer";
+'use client'
+
+import React, { useState, useCallback, useEffect } from "react";
+import { useRouter } from 'next/navigation';
 import Editor from "../Editor/Editor";
 import AIChat from "../AIChat/AIChat";
-import { PanelLeft, BotIcon, Save } from "lucide-react";
+import { ArrowLeft, Save, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { FileItem } from "@/types/fileTypes";
 
-const CarbonPaper: React.FC = () => {
-  const [isFileExplorerOpen, setIsFileExplorerOpen] = useState(true);
+interface CarbonPaperProps {
+  fileId: string;
+}
+
+const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
+  const router = useRouter();
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
-  const [currentFile, setCurrentFile] = useState<FileItem>({
-    id: "default",
-    name: "Untitled",
-    content:
-      "<h1>Welcome to CarbonPaper</h1><p>Start crafting your document...</p>",
-    isSaved: true,
-  });
-  const [files, setFiles] = useState<FileItem[]>([]);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [pendingFileSelect, setPendingFileSelect] = useState<FileItem | null>(
-    null
-  );
-  const [isEditingFileName, setIsEditingFileName] = useState(false);
-  const currentFileIdRef = useRef(currentFile.id);
+  const [currentFile, setCurrentFile] = useState<FileItem | null>(null);
 
   useEffect(() => {
-    setFiles([currentFile]);
-  }, []);
+    const fetchFile = async () => {
+      try {
+        const response = await fetch(`/api/files/${fileId}`);
+        if (response.ok) {
+          const file = await response.json();
+          setCurrentFile(file);
+        } else {
+          console.error('Failed to fetch file');
+          router.push('/');
+        }
+      } catch (error) {
+        console.error('Error fetching file:', error);
+        router.push('/');
+      }
+    };
 
-  useEffect(() => {
-    currentFileIdRef.current = currentFile.id;
-  }, [currentFile]);
+    fetchFile();
+  }, [fileId, router]);
 
-  const handleFileSelect = (file: FileItem) => {
-    if (currentFile && !currentFile.isSaved) {
-      setPendingFileSelect(file);
-      setIsDialogOpen(true);
-    } else {
-      setCurrentFile(file);
-      setFiles((prevFiles) => [...prevFiles]);
-    }
-  };
-
-  const handleDialogConfirm = () => {
-    handleSave();
-    if (pendingFileSelect) {
-      setCurrentFile(pendingFileSelect);
-      setPendingFileSelect(null);
-    }
-    setIsDialogOpen(false);
-  };
-
-  const handleDialogCancel = () => {
-    if (pendingFileSelect) {
-      setCurrentFile(pendingFileSelect);
-      setPendingFileSelect(null);
-    }
-    setIsDialogOpen(false);
-  };
-
-  const handleFileRename = (fileId: string, newName: string) => {
-    setFiles((prevFiles) => {
-      const newFiles = prevFiles.map((file) =>
-        file.id === fileId ? { ...file, name: newName, isSaved: false } : file
-      );
-      return newFiles;
-    });
-    if (currentFile.id === fileId) {
-      setCurrentFile((prevFile) => ({
-        ...prevFile,
-        name: newName,
+  const handleContentChange = useCallback((newContent: string) => {
+    if (currentFile) {
+      setCurrentFile(prevFile => ({
+        ...prevFile!,
+        content: newContent,
         isSaved: false,
       }));
     }
-  };
+  }, [currentFile]);
 
-  const handleContentChange = useCallback((newContent: string) => {
-    setCurrentFile((prevFile) => {
-      const updatedFile = { ...prevFile, content: newContent, isSaved: false };
-      return updatedFile;
-    });
-    setFiles((prevFiles) => {
-      const newFiles = prevFiles.map((file) =>
-        file.id === currentFileIdRef.current
-          ? { ...file, content: newContent, isSaved: false }
-          : file
-      );
-      return newFiles;
-    });
-  }, []);
-
-  const handleSave = useCallback(() => {
-    setCurrentFile((prevFile) => {
-      const updatedFile = { ...prevFile, isSaved: true };
-      return updatedFile;
-    });
-    setFiles((prevFiles) => {
-      const newFiles = prevFiles.map((file) =>
-        file.id === currentFileIdRef.current ? { ...file, isSaved: true } : file
-      );
-      return newFiles;
-    });
-  }, []);
-
-  const handleFileAdd = (file: FileItem) => {
-    const newFile = { ...file, id: Date.now().toString(), isSaved: true };
-    setFiles((prevFiles) => [...prevFiles, newFile]);
-    setCurrentFile(newFile);
-  };
-
-  const handleFileDelete = (fileId: string) => {
-    setFiles((prevFiles) => prevFiles.filter((file) => file.id !== fileId));
-    if (currentFile.id === fileId) {
-      const remainingFiles = files.filter((file) => file.id !== fileId);
-      if (remainingFiles.length > 0) {
-        setCurrentFile(remainingFiles[0]);
-      } else {
-        setCurrentFile({
-          id: "default",
-          name: "Untitled",
-          content:
-            "<h1>Welcome to CarbonPaper</h1><p>Start crafting your document...</p>",
-          isSaved: true,
+  const handleSave = useCallback(async () => {
+    if (currentFile) {
+      try {
+        const response = await fetch(`/api/files/${currentFile.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(currentFile),
         });
+        if (response.ok) {
+          setCurrentFile(prevFile => ({
+            ...prevFile!,
+            isSaved: true,
+          }));
+        } else {
+          console.error('Failed to save file');
+        }
+      } catch (error) {
+        console.error('Error saving file:', error);
       }
     }
-  };
+  }, [currentFile]);
+
+  const handleNameChange = useCallback(async (newName: string) => {
+    if (currentFile) {
+      try {
+        const response = await fetch(`/api/files/${currentFile.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name: newName }),
+        });
+        if (response.ok) {
+          setCurrentFile(prevFile => ({
+            ...prevFile!,
+            name: newName,
+            isSaved: false,
+          }));
+        } else {
+          console.error('Failed to update file name');
+        }
+      } catch (error) {
+        console.error('Error updating file name:', error);
+      }
+    }
+  }, [currentFile]);
+
+  if (!currentFile) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -147,30 +109,17 @@ const CarbonPaper: React.FC = () => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setIsFileExplorerOpen(!isFileExplorerOpen)}
+            onClick={() => router.push('/')}
             className="text-gray-600 hover:text-gray-900"
           >
-            <PanelLeft className="h-5 w-5" />
+            <ArrowLeft className="h-5 w-5" />
           </Button>
-          {isEditingFileName ? (
-            <Input
-              value={currentFile.name}
-              onChange={(e) => handleFileRename(currentFile.id, e.target.value)}
-              onBlur={() => setIsEditingFileName(false)}
-              onKeyPress={(e) =>
-                e.key === "Enter" && setIsEditingFileName(false)
-              }
-              autoFocus
-              className="text-xl font-semibold text-gray-800 w-64"
-            />
-          ) : (
-            <h2
-              className="text-xl font-semibold text-gray-800 cursor-pointer"
-              onClick={() => setIsEditingFileName(true)}
-            >
-              {currentFile?.name || "Untitled"}
-            </h2>
-          )}
+          <Input
+            type="text"
+            value={currentFile.name}
+            onChange={(e) => handleNameChange(e.target.value)}
+            className="text-xl font-semibold text-gray-800 bg-transparent border-none focus:outline-none focus:ring-0"
+          />
           <Button
             variant="ghost"
             size="sm"
@@ -195,68 +144,23 @@ const CarbonPaper: React.FC = () => {
           onClick={() => setIsAIChatOpen(!isAIChatOpen)}
           className="text-gray-600 hover:text-gray-900"
         >
-          <BotIcon className="h-5 w-5" />
+          <MessageSquare className="h-5 w-5 mr-2" />
+          AI Chat
         </Button>
       </div>
       <div className="flex flex-grow overflow-hidden">
-      <AnimatePresence>
-  {isFileExplorerOpen && (
-    <motion.div
-      initial={{ width: 0, x: -300 }}
-      animate={{ width: "auto", x: 0 }} 
-      exit={{ width: 0, x: -300 }} 
-      transition={{ duration: 0.3 }} 
-    >
-      <FileExplorer
-        isOpen={isFileExplorerOpen}
-        files={files}
-        onFileSelect={handleFileSelect}
-        onFileRename={handleFileRename}
-        onFileAdd={handleFileAdd}
-        onFileDelete={handleFileDelete}
-        currentFileId={currentFile.id}
-      />
-    </motion.div>
-  )}
-</AnimatePresence>
-
-
         <div className="flex-grow">
           <Editor
             currentFile={currentFile}
             onContentChange={handleContentChange}
           />
         </div>
-        <AnimatePresence>
-          {isAIChatOpen && (
-            <motion.div
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: "auto", opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <AIChat isOpen={isAIChatOpen} />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {isAIChatOpen && (
+          <div className="w-64 border-l border-gray-200">
+            <AIChat isOpen={isAIChatOpen} />
+          </div>
+        )}
       </div>
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Unsaved Changes</DialogTitle>
-            <DialogDescription>
-              You have unsaved changes. Do you want to save before switching
-              files?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={handleDialogCancel}>
-              Don't Save
-            </Button>
-            <Button onClick={handleDialogConfirm}>Save</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

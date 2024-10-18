@@ -1,7 +1,9 @@
-import CarbonPaper from "@/components/Layout/CarbonPaper";
+import FileExplorer from '@/components/FileExplorer/FileExplorer'
 
 export default function Home() {
   return (
-    <CarbonPaper />
-  );
+    <main>
+      <FileExplorer />
+    </main>
+  )
 }

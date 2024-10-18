@@ -1,4 +1,3 @@
-// File: components/Editor/Editor.tsx
 import React, { useRef, useEffect, useCallback } from "react";
 import Toolbar from "./Toolbar";
 import { useEditorState } from "./useEditorState";
@@ -52,7 +51,7 @@ const Editor: React.FC<EditorProps> = ({
 
   useEffect(() => {
     setHtml(currentFile.content);
-  }, [currentFile.id, currentFile.content]);
+  }, [currentFile.id, currentFile.content, setHtml]);
 
   const initializeIframe = () => {
     if (iframeRef.current) {
