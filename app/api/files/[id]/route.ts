@@ -1,3 +1,5 @@
+// File: app/api/files/[id]/route.ts
+
 import { NextResponse } from 'next/server';
 import { getFile, updateFile, deleteFile } from '@/lib/mockDb';
 

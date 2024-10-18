@@ -1,3 +1,4 @@
+// File: components/AIChat/AIChat.tsx
 import React, { useState } from 'react';
 import { Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,7 +27,7 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="w-64 h-full bg-white border-l border-gray-200 flex flex-col">
+    <div className="w-full h-full bg-white flex flex-col">
       <div className="flex-grow overflow-auto p-4 space-y-4">
         {messages.map((message, index) => (
           <div key={index} className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}>

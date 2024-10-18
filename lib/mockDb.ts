@@ -1,3 +1,4 @@
+// File: lib/mockDb.ts
 import { FileItem } from '@/types/fileTypes';
 
 let files: FileItem[] = [

@@ -1,11 +1,13 @@
 // File: components/Layout/CarbonPaper.tsx
-'use client'
+"use client";
 
 import React, { useState, useCallback, useEffect } from "react";
-import { useRouter } from 'next/navigation';
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { Resizable } from "re-resizable";
 import Editor from "../Editor/Editor";
 import AIChat from "../AIChat/AIChat";
-import { ArrowLeft, Save, MessageSquare } from "lucide-react";
+import { ArrowLeft, Save, MessageSquare, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -19,6 +21,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   const router = useRouter();
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [currentFile, setCurrentFile] = useState<FileItem | null>(null);
+  const [aiChatWidth, setAiChatWidth] = useState(400); // Default width for desktop
 
   useEffect(() => {
     const fetchFile = async () => {
@@ -28,76 +31,82 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           const file = await response.json();
           setCurrentFile(file);
         } else {
-          console.error('Failed to fetch file');
-          router.push('/');
+          console.error("Failed to fetch file");
+          router.push("/");
         }
       } catch (error) {
-        console.error('Error fetching file:', error);
-        router.push('/');
+        console.error("Error fetching file:", error);
+        router.push("/");
       }
     };
 
     fetchFile();
   }, [fileId, router]);
 
-  const handleContentChange = useCallback((newContent: string) => {
-    if (currentFile) {
-      setCurrentFile(prevFile => ({
-        ...prevFile!,
-        content: newContent,
-        isSaved: false,
-      }));
-    }
-  }, [currentFile]);
+  const handleContentChange = useCallback(
+    (newContent: string) => {
+      if (currentFile) {
+        setCurrentFile((prevFile) => ({
+          ...prevFile!,
+          content: newContent,
+          isSaved: false,
+        }));
+      }
+    },
+    [currentFile]
+  );
 
   const handleSave = useCallback(async () => {
     if (currentFile) {
       try {
         const response = await fetch(`/api/files/${currentFile.id}`, {
-          method: 'PUT',
+          method: "PUT",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify(currentFile),
         });
         if (response.ok) {
-          setCurrentFile(prevFile => ({
+          setCurrentFile((prevFile) => ({
             ...prevFile!,
             isSaved: true,
           }));
         } else {
-          console.error('Failed to save file');
+          console.error("Failed to save file");
         }
       } catch (error) {
-        console.error('Error saving file:', error);
+        console.error("Error saving file:", error);
       }
     }
   }, [currentFile]);
 
-  const handleNameChange = useCallback(async (newName: string) => {
-    if (currentFile) {
-      try {
-        const response = await fetch(`/api/files/${currentFile.id}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ name: newName }),
-        });
-        if (response.ok) {
-          setCurrentFile(prevFile => ({
-            ...prevFile!,
-            name: newName,
-            isSaved: false,
-          }));
-        } else {
-          console.error('Failed to update file name');
+  const handleNameChange = useCallback(
+    async (newName: string) => {
+      if (currentFile) {
+        try {
+          const response = await fetch(`/api/files/${currentFile.id}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ name: newName }),
+          });
+          if (response.ok) {
+            setCurrentFile((prevFile) => ({
+              ...prevFile!,
+              name: newName,
+              isSaved: false,
+            }));
+          } else {
+            console.error("Failed to update file name");
+          }
+        } catch (error) {
+          console.error("Error updating file name:", error);
         }
-      } catch (error) {
-        console.error('Error updating file name:', error);
       }
-    }
-  }, [currentFile]);
+    },
+    [currentFile]
+  );
 
   if (!currentFile) {
     return <div>Loading...</div>;
@@ -110,7 +119,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => router.push('/')}
+            onClick={() => router.push("/")}
             className="text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -130,10 +139,12 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           >
             <Save className="h-5 w-5" />
           </Button>
-          <Badge 
-            variant={currentFile.isSaved ? "secondary" : "outline"} 
+          <Badge
+            variant={currentFile.isSaved ? "secondary" : "outline"}
             className={`text-xs px-2 py-1 transition-all duration-300 ${
-              currentFile.isSaved ? 'bg-gray-200 text-gray-700' : 'bg-white text-gray-500 border-gray-300'
+              currentFile.isSaved
+                ? "bg-gray-200 text-gray-700"
+                : "bg-white text-gray-500 border-gray-300"
             }`}
           >
             {currentFile.isSaved ? "Saved" : "Unsaved"}
@@ -149,18 +160,63 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           AI Chat
         </Button>
       </div>
-      <div className="flex flex-grow overflow-hidden">
+      <div className="flex flex-grow overflow-hidden relative">
         <div className="flex-grow">
           <Editor
             currentFile={currentFile}
             onContentChange={handleContentChange}
           />
         </div>
-        {isAIChatOpen && (
-          <div className="w-64 border-l border-gray-200">
-            <AIChat isOpen={isAIChatOpen} />
-          </div>
-        )}
+        <AnimatePresence>
+          {isAIChatOpen && (
+            <>
+              {/* Mobile full-screen overlay */}
+              <motion.div
+                className="fixed inset-0 bg-white z-50 lg:hidden flex flex-col"
+                initial={{ opacity: 0, x: "100%" }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: "100%" }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex justify-between items-center p-3 border-b border-gray-200">
+                  <h2 className="text-lg font-semibold">AI Chat</h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsAIChatOpen(false)}
+                  >
+                    <X className="h-5 w-5" />
+                  </Button>
+                </div>
+                <div className="flex-grow overflow-y-auto">
+                  <AIChat isOpen={isAIChatOpen} />
+                </div>
+              </motion.div>
+
+              {/* Desktop Resizable AI Chat */}
+              <motion.div
+                className="hidden lg:block h-full"
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: aiChatWidth, opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Resizable
+                  size={{ width: aiChatWidth, height: "100%" }}
+                  onResizeStop={(e, direction, ref, d) => {
+                    setAiChatWidth(aiChatWidth + d.width);
+                  }}
+                  enable={{ left: true }}
+                  minWidth={300}
+                  maxWidth={800}
+                  className="border-l border-gray-200"
+                >
+                  <AIChat isOpen={isAIChatOpen} />
+                </Resizable>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

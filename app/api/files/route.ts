@@ -1,6 +1,6 @@
+// File: app/api/files/route.ts
 import { NextResponse } from 'next/server';
 import { getAllFiles, addFile } from '@/lib/mockDb';
-import { FileItem } from '@/types/fileTypes';
 
 export async function GET() {
   return NextResponse.json(getAllFiles());

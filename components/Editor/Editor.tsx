@@ -62,6 +62,7 @@ const Editor: React.FC<EditorProps> = ({
         doc.write(`
           <html>
             <head>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
               <style>
                 body {
                   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -73,6 +74,7 @@ const Editor: React.FC<EditorProps> = ({
                   display: flex;
                   flex-direction: column;
                   align-items: center;
+                  min-height: 100vh;
                 }
                 .page {
                   background-color: white;
@@ -83,8 +85,13 @@ const Editor: React.FC<EditorProps> = ({
                   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
                   box-sizing: border-box;
                 }
-                .page:not(:last-child) {
-                  margin-bottom: 0.5in;
+                @media (max-width: 900px) {
+                  .page {
+                    width: 100%;
+                    padding: 0.5in;
+                    margin: 0;
+                    min-height: 100vh;
+                  }
                 }
                 @media print {
                   body {
@@ -190,7 +197,6 @@ const Editor: React.FC<EditorProps> = ({
         if (doc) {
           doc.execCommand("styleWithCSS", false, "true");
           
-          // Handle font size separately
           if (command === "fontSize") {
             doc.execCommand(command, false, (parseInt(value, 10) / 16).toString());
           } else {
@@ -201,7 +207,6 @@ const Editor: React.FC<EditorProps> = ({
           setHtml(newContent);
           onContentChange(newContent);
 
-          // Update current styles
           const selection = doc.getSelection();
           if (selection && selection.rangeCount > 0) {
             const range = selection.getRangeAt(0);
@@ -226,7 +231,6 @@ const Editor: React.FC<EditorProps> = ({
             range.insertNode(span.firstChild!);
           }
 
-          // Restore focus to the iframe
           iframeRef.current.focus();
           (doc.querySelector(".page") as HTMLElement).focus();
         }
@@ -263,7 +267,6 @@ const Editor: React.FC<EditorProps> = ({
         setIsUnderline(false);
         setTextAlign("left");
 
-        // Restore focus to the iframe
         iframeRef.current.focus();
         (doc.querySelector(".page") as HTMLElement).focus();
       }
@@ -293,27 +296,29 @@ const Editor: React.FC<EditorProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      <Toolbar
-        currentFont={currentFont}
-        setCurrentFont={setCurrentFont}
-        currentSize={currentSize}
-        setCurrentSize={setCurrentSize}
-        currentColor={currentColor}
-        setCurrentColor={setCurrentColor}
-        currentHighlight={currentHighlight}
-        setCurrentHighlight={setCurrentHighlight}
-        colorOpen={colorOpen}
-        setColorOpen={setColorOpen}
-        highlightOpen={highlightOpen}
-        setHighlightOpen={setHighlightOpen}
-        isBold={isBold}
-        isItalic={isItalic}
-        isUnderline={isUnderline}
-        textAlign={textAlign}
-        applyFormatting={applyFormatting}
-        clearFormatting={clearFormatting}
-        refocusEditor={refocusEditor}
-      />
+      <div className="overflow-x-auto">
+        <Toolbar
+          currentFont={currentFont}
+          setCurrentFont={setCurrentFont}
+          currentSize={currentSize}
+          setCurrentSize={setCurrentSize}
+          currentColor={currentColor}
+          setCurrentColor={setCurrentColor}
+          currentHighlight={currentHighlight}
+          setCurrentHighlight={setCurrentHighlight}
+          colorOpen={colorOpen}
+          setColorOpen={setColorOpen}
+          highlightOpen={highlightOpen}
+          setHighlightOpen={setHighlightOpen}
+          isBold={isBold}
+          isItalic={isItalic}
+          isUnderline={isUnderline}
+          textAlign={textAlign}
+          applyFormatting={applyFormatting}
+          clearFormatting={clearFormatting}
+          refocusEditor={refocusEditor}
+        />
+      </div>
       <div className="flex-grow overflow-auto p-4">
         <iframe
           ref={iframeRef}
