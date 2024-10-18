@@ -15,6 +15,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FileItem } from "@/types/fileTypes";
 
+const HTMLPreview: React.FC<{ content: string }> = ({ content }) => {
+  return (
+    <div className="w-full h-full overflow-hidden bg-white">
+      <iframe
+        srcDoc={content}
+        title="HTML Preview"
+        className="w-full h-full pointer-events-none transform scale-50 origin-top-left"
+        style={{ width: '200%', height: '200%' }}
+      />
+    </div>
+  );
+};
+
 const FileExplorer: React.FC = () => {
   const router = useRouter();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -187,8 +200,8 @@ const FileExplorer: React.FC = () => {
           <Card key={file.id} className="cursor-pointer" onClick={() => handleFileSelect(file)}>
             <CardContent className="p-4">
               {viewMode === 'grid' && (
-                <div className="aspect-video mb-2 bg-muted flex items-center justify-center">
-                  <FileText className="h-12 w-12 text-gray-400" />
+                <div className="aspect-video mb-2 bg-muted flex items-center justify-center overflow-hidden">
+                  <HTMLPreview content={file.content} />
                 </div>
               )}
               <div className="flex items-center justify-between">

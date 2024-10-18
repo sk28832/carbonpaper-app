@@ -1,3 +1,4 @@
+// File: components/Layout/CarbonPaper.tsx
 'use client'
 
 import React, { useState, useCallback, useEffect } from "react";

@@ -1,3 +1,4 @@
+// File: components/Editor/Editor.tsx
 import React, { useRef, useEffect, useCallback } from "react";
 import Toolbar from "./Toolbar";
 import { useEditorState } from "./useEditorState";
