@@ -1,12 +1,28 @@
-// File: components/FileExplorer/FileExplorer.tsx
-'use client'
+"use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from 'next/navigation';
-import { Upload, Download, MoreVertical, Edit2, Plus, Trash2, Grid, List, FileText } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Upload,
+  Download,
+  MoreVertical,
+  Edit2,
+  Plus,
+  Trash2,
+  Grid,
+  List,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FileItem } from "@/types/fileTypes";
+import { toast } from "@/hooks/use-toast";
 
 const HTMLPreview: React.FC<{ content: string }> = ({ content }) => {
   return (
@@ -22,7 +39,7 @@ const HTMLPreview: React.FC<{ content: string }> = ({ content }) => {
         srcDoc={content}
         title="HTML Preview"
         className="w-full h-full pointer-events-none transform scale-50 origin-top-left"
-        style={{ width: '200%', height: '200%' }}
+        style={{ width: "200%", height: "200%" }}
       />
     </div>
   );
@@ -30,10 +47,12 @@ const HTMLPreview: React.FC<{ content: string }> = ({ content }) => {
 
 const FileExplorer: React.FC = () => {
   const router = useRouter();
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [editingFile, setEditingFile] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState<string>("");
   const [files, setFiles] = useState<FileItem[]>([]);
+  const [isNewFileDialogOpen, setIsNewFileDialogOpen] = useState(false);
+  const [newFileNameInput, setNewFileNameInput] = useState("");
 
   useEffect(() => {
     fetchFiles();
@@ -41,20 +60,39 @@ const FileExplorer: React.FC = () => {
 
   const fetchFiles = async () => {
     try {
-      const response = await fetch('/api/files');
+      const response = await fetch("/api/files");
       if (response.ok) {
         const data = await response.json();
         setFiles(data);
       } else {
-        console.error('Failed to fetch files');
+        throw new Error("Failed to fetch files");
       }
     } catch (error) {
-      console.error('Error fetching files:', error);
+      console.error("Error fetching files:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load files. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
-  const handleFileSelect = (file: FileItem) => {
-    router.push(`/editor/${file.id}`);
+  const handleFileSelect = async (file: FileItem) => {
+    try {
+      const response = await fetch(`/api/files/${file.id}`);
+      if (response.ok) {
+        router.push(`/editor/${file.id}`);
+      } else {
+        throw new Error("Failed to fetch file");
+      }
+    } catch (error) {
+      console.error("Error selecting file:", error);
+      toast({
+        title: "Error",
+        description: "Failed to open the file. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -64,21 +102,30 @@ const FileExplorer: React.FC = () => {
       reader.onload = async (e) => {
         const content = e.target?.result as string;
         try {
-          const response = await fetch('/api/files', {
-            method: 'POST',
+          const response = await fetch("/api/files", {
+            method: "POST",
             headers: {
-              'Content-Type': 'application/json',
+              "Content-Type": "application/json",
             },
             body: JSON.stringify({ name: file.name, content }),
           });
           if (response.ok) {
             const newFile = await response.json();
-            setFiles(prevFiles => [...prevFiles, newFile]);
+            setFiles((prevFiles) => [...prevFiles, newFile]);
+            toast({
+              title: "Success",
+              description: "File uploaded successfully.",
+            });
           } else {
-            console.error('Failed to upload file');
+            throw new Error("Failed to upload file");
           }
         } catch (error) {
-          console.error('Error uploading file:', error);
+          console.error("Error uploading file:", error);
+          toast({
+            title: "Error",
+            description: "Failed to upload file. Please try again.",
+            variant: "destructive",
+          });
         }
       };
       reader.readAsText(file);
@@ -100,10 +147,15 @@ const FileExplorer: React.FC = () => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       } else {
-        console.error('Failed to export file');
+        throw new Error("Failed to export file");
       }
     } catch (error) {
-      console.error('Error exporting file:', error);
+      console.error("Error exporting file:", error);
+      toast({
+        title: "Error",
+        description: "Failed to export file. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -116,70 +168,104 @@ const FileExplorer: React.FC = () => {
     if (editingFile && newFileName) {
       try {
         const response = await fetch(`/api/files/${editingFile}`, {
-          method: 'PATCH',
+          method: "PATCH",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({ name: newFileName }),
         });
         if (response.ok) {
-          fetchFiles();
+          await fetchFiles();
+          toast({
+            title: "Success",
+            description: "File renamed successfully.",
+          });
         } else {
-          console.error('Failed to rename file');
+          throw new Error("Failed to rename file");
         }
       } catch (error) {
-        console.error('Error renaming file:', error);
+        console.error("Error renaming file:", error);
+        toast({
+          title: "Error",
+          description: "Failed to rename file. Please try again.",
+          variant: "destructive",
+        });
       }
     }
     setEditingFile(null);
   };
 
   const handleFileAdd = async () => {
+    if (newFileNameInput.trim() === "") return;
+
     try {
-      const response = await fetch('/api/files', {
-        method: 'POST',
+      const response = await fetch("/api/files", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: "New Document",
-          content: "<h1>New Document</h1><p>Start writing here...</p>",
+          name: newFileNameInput,
+          content: `<h1>${newFileNameInput}</h1><p>Start writing here...</p>`,
         }),
       });
       if (response.ok) {
-        fetchFiles();
+        await fetchFiles();
+        setIsNewFileDialogOpen(false);
+        setNewFileNameInput("");
+        toast({
+          title: "Success",
+          description: "New file created successfully.",
+        });
       } else {
-        console.error('Failed to add new file');
+        throw new Error("Failed to add new file");
       }
     } catch (error) {
-      console.error('Error adding new file:', error);
+      console.error("Error adding new file:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create new file. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
   const handleFileDelete = async (fileId: string) => {
     try {
       const response = await fetch(`/api/files/${fileId}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
       if (response.ok) {
-        fetchFiles();
+        await fetchFiles();
+        toast({
+          title: "Success",
+          description: "File deleted successfully.",
+        });
       } else {
-        console.error('Failed to delete file');
+        throw new Error("Failed to delete file");
       }
     } catch (error) {
-      console.error('Error deleting file:', error);
+      console.error("Error deleting file:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete file. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-4">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 space-y-4 md:space-y-0">
         <h1 className="text-2xl font-semibold">CarbonPaper</h1>
-        <div className="flex items-center space-x-2">
-          <Button onClick={handleFileAdd}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={() => setIsNewFileDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" /> New
           </Button>
-          <Button variant="outline" onClick={() => document.getElementById("fileInput")?.click()}>
+          <Button
+            variant="outline"
+            onClick={() => document.getElementById("fileInput")?.click()}
+          >
             <Upload className="mr-2 h-4 w-4" /> Upload
           </Button>
           <Input
@@ -189,17 +275,35 @@ const FileExplorer: React.FC = () => {
             onChange={handleFileUpload}
             className="hidden"
           />
-          <Button variant="outline" size="icon" onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}>
-            {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
+          >
+            {viewMode === "grid" ? (
+              <List className="h-4 w-4" />
+            ) : (
+              <Grid className="h-4 w-4" />
+            )}
           </Button>
         </div>
       </div>
 
-      <div className={`grid gap-4 ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-1'}`}>
+      <div
+        className={`grid gap-4 ${
+          viewMode === "grid"
+            ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+            : "grid-cols-1"
+        }`}
+      >
         {files.map((file) => (
-          <Card key={file.id} className="cursor-pointer" onClick={() => handleFileSelect(file)}>
+          <Card
+            key={file.id}
+            className="cursor-pointer"
+            onClick={() => handleFileSelect(file)}
+          >
             <CardContent className="p-4">
-              {viewMode === 'grid' && (
+              {viewMode === "grid" && (
                 <div className="aspect-video mb-2 bg-muted flex items-center justify-center overflow-hidden">
                   <HTMLPreview content={file.content} />
                 </div>
@@ -215,32 +319,78 @@ const FileExplorer: React.FC = () => {
                     className="text-sm"
                   />
                 ) : (
-                  <span className="text-sm font-medium truncate">{file.name}</span>
+                  <span className="text-sm font-medium truncate">
+                    {file.name}
+                  </span>
                 )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); startRenaming(file.id, file.name); }}>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startRenaming(file.id, file.name);
+                      }}
+                    >
                       <Edit2 className="h-4 w-4 mr-2" /> Rename
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleFileExport(file); }}>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleFileExport(file);
+                      }}
+                    >
                       <Download className="h-4 w-4 mr-2" /> Export
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleFileDelete(file.id); }} className="text-red-500">
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleFileDelete(file.id);
+                      }}
+                      className="text-red-500"
+                    >
                       <Trash2 className="h-4 w-4 mr-2" /> Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-              {!file.isSaved && <span className="text-xs text-yellow-500">Unsaved changes</span>}
+              {!file.isSaved && (
+                <span className="text-xs text-yellow-500">Unsaved changes</span>
+              )}
             </CardContent>
           </Card>
         ))}
       </div>
+      <Dialog open={isNewFileDialogOpen} onOpenChange={setIsNewFileDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Document</DialogTitle>
+            <DialogDescription>Enter a name for your new document.</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={newFileNameInput}
+            onChange={(e) => setNewFileNameInput(e.target.value)}
+            placeholder="Enter document name"
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsNewFileDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleFileAdd}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
