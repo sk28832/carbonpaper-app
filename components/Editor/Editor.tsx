@@ -65,9 +65,9 @@ const Editor: React.FC<EditorProps> = ({
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
               <style>
                 body {
-                  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                  color: #333;
-                  line-height: 1.6;
+                  font-family: 'Calibri', sans-serif;
+                  font-size: 11pt;
+                  line-height: 1.15;
                   background-color: #f0f0f0;
                   margin: 0;
                   padding: 0;
@@ -76,46 +76,54 @@ const Editor: React.FC<EditorProps> = ({
                   align-items: center;
                   min-height: 100vh;
                 }
-                .page {
+                #editor-container {
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  padding: 0.5in 0;
+                  box-sizing: border-box;
+                  min-height: 100vh;
+                }
+                #editor-content {
                   background-color: white;
                   width: 8.5in;
                   min-height: 11in;
                   padding: 1in;
-                  margin: 0.5in 0;
+                  margin-bottom: 0.5in;
                   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
                   box-sizing: border-box;
-                }
-                @media (max-width: 900px) {
-                  .page {
-                    width: 100%;
-                    padding: 0.5in;
-                    margin: 0;
-                    min-height: 100vh;
-                  }
+                  overflow-wrap: break-word;
+                  word-wrap: break-word;
+                  word-break: break-word;
                 }
                 @media print {
                   body {
                     background-color: white;
                   }
-                  .page {
-                    width: 100%;
-                    min-height: auto;
-                    box-shadow: none;
-                    margin: 0;
+                  #editor-container {
                     padding: 0;
                   }
+                  #editor-content {
+                    width: 100%;
+                    height: 100%;
+                    min-height: 0;
+                    margin: 0;
+                    padding: 0;
+                    box-shadow: none;
+                  }
                 }
-                h1 { color: #2c3e50; }
               </style>
             </head>
             <body>
-              <div class="page" contenteditable="true"></div>
+              <div id="editor-container">
+                <div id="editor-content" contenteditable="true"></div>
+              </div>
             </body>
           </html>
         `);
         doc.close();
         attachIframeListeners(doc);
-        doc.querySelector(".page")!.innerHTML = html || "";
+        doc.getElementById("editor-content")!.innerHTML = html || "";
       }
     }
   };
@@ -123,43 +131,15 @@ const Editor: React.FC<EditorProps> = ({
   const updateIframeContent = () => {
     if (iframeRef.current) {
       const doc = iframeRef.current.contentDocument;
-      if (doc && doc.querySelector(".page")!.innerHTML !== html) {
-        const selection = doc.getSelection();
-        let range: Range | null = null;
-        let startContainer: Node | null = null;
-        let startOffset: number = 0;
-
-        if (selection && selection.rangeCount > 0) {
-          range = selection.getRangeAt(0);
-          startContainer = range.startContainer;
-          startOffset = range.startOffset;
-        }
-
-        doc.querySelector(".page")!.innerHTML = html;
-
-        if (range && startContainer) {
-          const newRange = doc.createRange();
-          let newStartContainer: Node | null = startContainer;
-
-          while (newStartContainer && !doc.body.contains(newStartContainer)) {
-            newStartContainer = newStartContainer.parentNode;
-          }
-
-          if (newStartContainer) {
-            newRange.setStart(newStartContainer, startOffset);
-            newRange.collapse(true);
-
-            selection?.removeAllRanges();
-            selection?.addRange(newRange);
-          }
-        }
+      if (doc && doc.getElementById("editor-content")!.innerHTML !== html) {
+        doc.getElementById("editor-content")!.innerHTML = html;
       }
     }
   };
 
   const attachIframeListeners = (doc: Document) => {
     const updateHtml = () => {
-      const content = doc.querySelector(".page")!.innerHTML;
+      const content = doc.getElementById("editor-content")!.innerHTML;
       if (content !== html) {
         setHtml(content);
         onContentChange(content);
@@ -186,7 +166,7 @@ const Editor: React.FC<EditorProps> = ({
       }
     };
 
-    doc.querySelector(".page")!.addEventListener("input", updateHtml);
+    doc.getElementById("editor-content")!.addEventListener("input", updateHtml);
     doc.addEventListener("selectionchange", updateFormatting);
   };
 
@@ -203,7 +183,7 @@ const Editor: React.FC<EditorProps> = ({
             doc.execCommand(command, false, value);
           }
 
-          const newContent = doc.querySelector(".page")!.innerHTML;
+          const newContent = doc.getElementById("editor-content")!.innerHTML;
           setHtml(newContent);
           onContentChange(newContent);
 
@@ -232,7 +212,7 @@ const Editor: React.FC<EditorProps> = ({
           }
 
           iframeRef.current.focus();
-          (doc.querySelector(".page") as HTMLElement).focus();
+          doc.getElementById("editor-content")!.focus();
         }
       }
     },
@@ -255,11 +235,11 @@ const Editor: React.FC<EditorProps> = ({
       const doc = iframeRef.current.contentDocument;
       if (doc) {
         doc.execCommand("removeFormat", false, "");
-        const newContent = doc.querySelector(".page")!.innerHTML;
+        const newContent = doc.getElementById("editor-content")!.innerHTML;
         setHtml(newContent);
         onContentChange(newContent);
-        setCurrentFont("Arial");
-        setCurrentSize("16");
+        setCurrentFont("Calibri");
+        setCurrentSize("11");
         setCurrentColor("black");
         setCurrentHighlight("none");
         setIsBold(false);
@@ -268,7 +248,7 @@ const Editor: React.FC<EditorProps> = ({
         setTextAlign("left");
 
         iframeRef.current.focus();
-        (doc.querySelector(".page") as HTMLElement).focus();
+        doc.getElementById("editor-content")!.focus();
       }
     }
   }, [
@@ -289,7 +269,7 @@ const Editor: React.FC<EditorProps> = ({
       const doc = iframeRef.current.contentDocument;
       if (doc) {
         iframeRef.current.focus();
-        (doc.querySelector(".page") as HTMLElement).focus();
+        doc.getElementById("editor-content")!.focus();
       }
     }
   }, []);
