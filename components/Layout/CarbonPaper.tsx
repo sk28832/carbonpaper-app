@@ -15,6 +15,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FileItem } from "@/types/fileTypes";
 import useDelayedState from "@/hooks/useDelayedState";
 import { Message } from "@/types/chatTypes";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { addChatMessage, updateFile } from "@/lib/mockDb";
 
 interface CarbonPaperProps {
   fileId: string;
@@ -29,6 +40,8 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   const [editorContent, setEditorContent] = useState("");
   const [editorTextContent, setEditorTextContent] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [navigationPath, setNavigationPath] = useState("");
 
   useEffect(() => {
     const fetchFile = async () => {
@@ -56,16 +69,20 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
     fetchFile();
   }, [fileId, router]);
 
-  // New useEffect to save messages when they change
   useEffect(() => {
-    if (currentFile && messages.length > 0) {
-      setCurrentFile((prevFile) => ({
-        ...prevFile!,
-        messages: messages,
-        isSaved: false,
-      }));
-    }
-  }, [messages]);
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (currentFile && !currentFile.isSaved) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [currentFile]);
 
   const extractTextFromHtml = (html: string): string => {
     const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -90,22 +107,22 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   const handleSave = useCallback(async () => {
     if (currentFile) {
       try {
+        const updatedFile = {
+          ...currentFile,
+          content: editorContent,
+          messages: messages,
+          isSaved: true,
+        };
         const response = await fetch(`/api/files/${currentFile.id}`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            ...currentFile,
-            content: editorContent,
-            messages: messages,
-          }),
+          body: JSON.stringify(updatedFile),
         });
         if (response.ok) {
-          setCurrentFile((prevFile) => ({
-            ...prevFile!,
-            isSaved: true,
-          }));
+          setCurrentFile(updatedFile);
+          console.log("File saved successfully");
         } else {
           console.error("Failed to save file");
         }
@@ -144,24 +161,53 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   );
 
   const handleAddMessage = useCallback(async (newMessage: Message) => {
-    setMessages((prevMessages) => [...prevMessages, newMessage]);
     if (currentFile) {
       try {
-        const response = await fetch(`/api/files/${currentFile.id}/messages`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(newMessage),
-        });
-        if (!response.ok) {
-          throw new Error("Failed to add message");
-        }
+        await addChatMessage(currentFile.id, newMessage);
+        setMessages((prevMessages) => [...prevMessages, newMessage]);
+        setCurrentFile((prevFile) => ({
+          ...prevFile!,
+          messages: [...prevFile!.messages, newMessage],
+          isSaved: false,
+        }));
+        console.log("Chat message added successfully");
       } catch (error) {
-        console.error("Error adding message:", error);
+        console.error("Error adding chat message:", error);
       }
     }
   }, [currentFile]);
+
+  const handleNavigation = useCallback((path: string) => {
+    if (currentFile && !currentFile.isSaved) {
+      setShowSaveDialog(true);
+      setNavigationPath(path);
+    } else {
+      router.push(path);
+    }
+  }, [currentFile, router]);
+
+  const handleConfirmNavigation = useCallback(async () => {
+    setShowSaveDialog(false);
+    if (currentFile && !currentFile.isSaved) {
+      await handleSave();
+    }
+    router.push(navigationPath);
+  }, [navigationPath, router, currentFile, handleSave]);
+
+  const handleCancelNavigation = useCallback(() => {
+    setShowSaveDialog(false);
+    setNavigationPath("");
+  }, []);
+
+  useEffect(() => {
+    const saveInterval = setInterval(() => {
+      if (currentFile && !currentFile.isSaved) {
+        handleSave();
+      }
+    }, 30000); // Auto-save every 30 seconds if there are unsaved changes
+
+    return () => clearInterval(saveInterval);
+  }, [currentFile, handleSave]);
 
   const LoadingSkeleton = () => (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -200,7 +246,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => router.push("/")}
+                  onClick={() => handleNavigation("/")}
                   className="text-gray-600 hover:text-gray-900"
                 >
                   <ArrowLeft className="h-5 w-5" />
@@ -272,8 +318,8 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
                         <AIChat 
                           editorContent={editorTextContent}
                           messages={messages}
-                          setMessages={setMessages}
                           updateDocumentContent={handleContentChange}
+                          addMessage={handleAddMessage}
                         />
                       </div>
                     </motion.div>
@@ -298,8 +344,8 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
                         <AIChat 
                           editorContent={editorTextContent}
                           messages={messages}
-                          setMessages={setMessages}
                           updateDocumentContent={handleContentChange}
+                          addMessage={handleAddMessage}
                         />
                       </Resizable>
                     </motion.div>
@@ -310,6 +356,26 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           </div>
         )}
       </motion.div>
+      <AlertDialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Save Changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Do you want to save before leaving?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelNavigation}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmNavigation}>Save and Leave</AlertDialogAction>
+            <Button variant="ghost" onClick={() => {
+              setShowSaveDialog(false);
+              router.push(navigationPath);
+            }}>
+              Leave without Saving
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AnimatePresence>
   );
 };

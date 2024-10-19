@@ -30,8 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
-  Tooltip,
-  TooltipContent,
+  Tooltip,TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
@@ -46,15 +45,15 @@ import { Message as MessageType, InputMode } from "@/types/chatTypes";
 interface AIChatProps {
   editorContent: string;
   messages: MessageType[];
-  setMessages: React.Dispatch<React.SetStateAction<MessageType[]>>;
   updateDocumentContent: (content: string) => void;
+  addMessage: (message: MessageType) => void;
 }
 
 const AIChat: React.FC<AIChatProps> = ({
   editorContent,
   messages,
-  setMessages,
   updateDocumentContent,
+  addMessage,
 }) => {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -169,7 +168,7 @@ const AIChat: React.FC<AIChatProps> = ({
       })),
     };
 
-    setMessages((prevMessages) => [...prevMessages, newUserMessage]);
+    addMessage(newUserMessage);
     setIsLoading(true);
     scrollToBottom();
 
@@ -246,22 +245,20 @@ const AIChat: React.FC<AIChatProps> = ({
           throw new Error("Invalid input mode");
       }
 
-      setMessages((prevMessages) => [...prevMessages, newAssistantMessage]);
+      addMessage(newAssistantMessage);
 
       if (inputMode === "edit" && data.changes) {
         updateDocumentContent(data.updatedContent);
       }
     } catch (error) {
       console.error("Error processing request:", error);
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        {
-          id: uuidv4(),
-          role: "assistant",
-          content: "Sorry, I couldn't process your request.",
-          type: "text",
-        },
-      ]);
+      const errorMessage: MessageType = {
+        id: uuidv4(),
+        role: "assistant",
+        content: "Sorry, I couldn't process your request.",
+        type: "text",
+      };
+      addMessage(errorMessage);
     } finally {
       setIsLoading(false);
       setIsSubmitting(false);
@@ -277,6 +274,7 @@ const AIChat: React.FC<AIChatProps> = ({
     selectedSource,
     scrollToBottom,
     updateDocumentContent,
+    addMessage,
   ]);
 
   const debouncedHandleSendMessage = useMemo(
@@ -366,7 +364,7 @@ const AIChat: React.FC<AIChatProps> = ({
             )}
           </ScrollArea>
         </motion.div>
-
+  
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -382,7 +380,7 @@ const AIChat: React.FC<AIChatProps> = ({
               </AlertDescription>
             </Alert>
           )}
-
+  
           {selectedDocuments.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {selectedDocuments.map((file, index) => (
@@ -410,7 +408,7 @@ const AIChat: React.FC<AIChatProps> = ({
               ))}
             </div>
           )}
-
+  
           {selectedSnippets.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {selectedSnippets.map((snippet, index) => (
@@ -434,7 +432,7 @@ const AIChat: React.FC<AIChatProps> = ({
               ))}
             </div>
           )}
-
+  
           <div className="space-y-2 relative">
             <div className="flex justify-between items-center">
               <TooltipProvider>
@@ -546,7 +544,7 @@ const AIChat: React.FC<AIChatProps> = ({
                 )}
               </AnimatePresence>
             </div>
-
+  
             <AnimatePresence>
               {inputMode === "research" && (
                 <motion.div
@@ -568,7 +566,7 @@ const AIChat: React.FC<AIChatProps> = ({
                 </motion.div>
               )}
             </AnimatePresence>
-
+  
             <div className="relative">
               <Textarea
                 value={input}
@@ -593,7 +591,7 @@ const AIChat: React.FC<AIChatProps> = ({
               <CommandPaletteTrigger setIsOpen={setIsCommandPaletteOpen} />
             </div>
           </div>
-
+  
           <div className="flex space-x-2">
             <Input
               type="file"
@@ -643,14 +641,14 @@ const AIChat: React.FC<AIChatProps> = ({
             </TooltipProvider>
           </div>
         </motion.div>
-
+  
         <CommandPalette
           mode={inputMode}
           onSelectExample={handleSelectExample}
           isOpen={isCommandPaletteOpen}
           setIsOpen={setIsCommandPaletteOpen}
         />
-
+  
         <Sources
           isOpen={isSourcesOpen}
           setIsOpen={setIsSourcesOpen}
