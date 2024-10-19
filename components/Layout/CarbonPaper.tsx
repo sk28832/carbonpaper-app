@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileItem } from "@/types/fileTypes";
 import useDelayedState from "@/hooks/useDelayedState";
+import { Message } from "@/types/chatTypes";
 
 interface CarbonPaperProps {
   fileId: string;
@@ -27,7 +28,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   const [isLoading, setIsLoading] = useDelayedState(true, 1000);
   const [editorContent, setEditorContent] = useState("");
   const [editorTextContent, setEditorTextContent] = useState("");
-  const [chatMessages, setChatMessages] = useState<{ text: string; isUser: boolean }[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
 
   useEffect(() => {
     const fetchFile = async () => {
@@ -39,7 +40,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           setCurrentFile(file);
           setEditorContent(file.content);
           setEditorTextContent(extractTextFromHtml(file.content));
-          setChatMessages(file.chatMessages || []);
+          setMessages(file.messages || []);
         } else {
           console.error("Failed to fetch file");
           router.push("/");
@@ -54,6 +55,17 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
 
     fetchFile();
   }, [fileId, router]);
+
+  // New useEffect to save messages when they change
+  useEffect(() => {
+    if (currentFile && messages.length > 0) {
+      setCurrentFile((prevFile) => ({
+        ...prevFile!,
+        messages: messages,
+        isSaved: false,
+      }));
+    }
+  }, [messages]);
 
   const extractTextFromHtml = (html: string): string => {
     const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -83,7 +95,11 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(currentFile),
+          body: JSON.stringify({
+            ...currentFile,
+            content: editorContent,
+            messages: messages,
+          }),
         });
         if (response.ok) {
           setCurrentFile((prevFile) => ({
@@ -97,7 +113,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
         console.error("Error saving file:", error);
       }
     }
-  }, [currentFile]);
+  }, [currentFile, editorContent, messages]);
 
   const handleNameChange = useCallback(
     async (newName: string) => {
@@ -127,23 +143,22 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
     [currentFile]
   );
 
-  const handleAddChatMessage = useCallback(async (message: { text: string; isUser: boolean }) => {
+  const handleAddMessage = useCallback(async (newMessage: Message) => {
+    setMessages((prevMessages) => [...prevMessages, newMessage]);
     if (currentFile) {
       try {
-        const response = await fetch(`/api/files/${currentFile.id}`, {
+        const response = await fetch(`/api/files/${currentFile.id}/messages`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(message),
+          body: JSON.stringify(newMessage),
         });
-        if (response.ok) {
-          setChatMessages((prev) => [...prev, message]);
-        } else {
-          throw new Error("Failed to add chat message");
+        if (!response.ok) {
+          throw new Error("Failed to add message");
         }
       } catch (error) {
-        console.error("Error adding chat message:", error);
+        console.error("Error adding message:", error);
       }
     }
   }, [currentFile]);
@@ -255,10 +270,10 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
                       </div>
                       <div className="flex-grow overflow-y-auto">
                         <AIChat 
-                          isOpen={isAIChatOpen} 
                           editorContent={editorTextContent}
-                          chatMessages={chatMessages}
-                          onAddMessage={handleAddChatMessage}
+                          messages={messages}
+                          setMessages={setMessages}
+                          updateDocumentContent={handleContentChange}
                         />
                       </div>
                     </motion.div>
@@ -281,10 +296,10 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
                         className="border-l border-gray-200"
                       >
                         <AIChat 
-                          isOpen={isAIChatOpen} 
                           editorContent={editorTextContent}
-                          chatMessages={chatMessages}
-                          onAddMessage={handleAddChatMessage}
+                          messages={messages}
+                          setMessages={setMessages}
+                          updateDocumentContent={handleContentChange}
                         />
                       </Resizable>
                     </motion.div>

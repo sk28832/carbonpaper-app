@@ -8,11 +8,17 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const data = await request.json();
+  
+  // Validate incoming data
+  if (!data.name || !data.content) {
+    return NextResponse.json({ error: 'Name and content are required' }, { status: 400 });
+  }
+
   const newFile = addFile({
     name: data.name,
     content: data.content,
     isSaved: true,
-    chatMessages: []
   });
+
   return NextResponse.json(newFile, { status: 201 });
 }
