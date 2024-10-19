@@ -459,7 +459,7 @@ const AIChat: React.FC<AIChatProps> = ({
                       <p>Ask a question</p>
                     </TooltipContent>
                   </Tooltip>
-                  <Tooltip>
+                  {/* <Tooltip>
                     <TooltipTrigger asChild>
                       <ToggleGroupItem
                         value="edit"
@@ -476,8 +476,8 @@ const AIChat: React.FC<AIChatProps> = ({
                     <TooltipContent>
                       <p>Edit document</p>
                     </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
+                  </Tooltip> */}
+                  {/* <Tooltip>
                     <TooltipTrigger asChild>
                       <ToggleGroupItem
                         value="draft"
@@ -494,7 +494,7 @@ const AIChat: React.FC<AIChatProps> = ({
                     <TooltipContent>
                       <p>Draft new clauses</p>
                     </TooltipContent>
-                  </Tooltip>
+                  </Tooltip> */}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <ToggleGroupItem
@@ -601,7 +601,7 @@ const AIChat: React.FC<AIChatProps> = ({
               style={{ display: "none" }}
               multiple
             />
-            <TooltipProvider>
+            {/* <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -618,7 +618,7 @@ const AIChat: React.FC<AIChatProps> = ({
                   <p>Attach files to your message</p>
                 </TooltipContent>
               </Tooltip>
-            </TooltipProvider>
+            </TooltipProvider> */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
