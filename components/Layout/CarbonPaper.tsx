@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Resizable } from "re-resizable";
 import Editor from "../Editor/Editor";
 import AIChat from "../AIChat/AIChat";
-import { ArrowLeft, Save, MessageSquare, X } from "lucide-react";
+import { ArrowLeft, Save, MessageSquare, X, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -299,8 +299,8 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
                 onClick={() => setIsAIChatOpen(!isAIChatOpen)}
                 className="text-gray-600 hover:text-gray-900"
               >
-                <MessageSquare className="h-5 w-5 mr-2" />
-                AI Chat
+                <Sparkles className="h-5 w-5" />
+                AI
               </Button>
             </div>
             <div className="flex flex-grow overflow-hidden relative">
@@ -322,7 +322,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
                       transition={{ duration: 0.3 }}
                     >
                       <div className="flex justify-between items-center p-3 border-b border-gray-200">
-                        <h2 className="text-lg font-semibold">AI Chat</h2>
+                        <h2 className="text-lg font-semibold">AI</h2>
                         <Button
                           variant="ghost"
                           size="sm"

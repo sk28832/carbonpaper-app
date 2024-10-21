@@ -1,8 +1,6 @@
-// File: components/AIChat/Message.tsx
-
 import React from "react";
 import ReactMarkdown from "react-markdown";
-import { FileText, File, PenTool, BookOpen } from "lucide-react";
+import { PenTool } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Message as MessageType, Change } from "@/types/chatTypes";
@@ -27,33 +25,33 @@ const Message: React.FC<MessageProps> = React.memo(
     handleAcceptDraft,
     handleRejectDraft,
   }) => {
-    const renderAttachments = () =>
-      message.attachments &&
-      message.attachments.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {message.attachments.map((attachment, i) => (
-            <div
-              key={i}
-              className="flex items-center bg-gray-200 rounded p-1 text-black"
-            >
-              {attachment.type === "pdf" ? (
-                <FileText size={16} />
-              ) : (
-                <File size={16} />
-              )}
-              <span className="ml-1 text-xs truncate max-w-[100px]">
-                {attachment.name}
-              </span>
-            </div>
-          ))}
-        </div>
-      );
-
     const renderMarkdownContent = (content: string) => (
       <ReactMarkdown className="prose prose-sm max-w-full break-words">
         {content}
       </ReactMarkdown>
     );
+
+    const renderCitations = () =>
+      message.citations &&
+      message.citations.length > 0 && (
+        <div className="mt-2">
+          <h4 className="text-xs font-semibold mb-1">Citations:</h4>
+          <ol className="list-decimal list-inside text-xs text-gray-600">
+            {message.citations.map((citation, index) => (
+              <li key={index} className="mb-1 break-words">
+                <a
+                  href={citation}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline"
+                >
+                  {citation}
+                </a>
+              </li>
+            ))}
+          </ol>
+        </div>
+      );
 
     if (message.type === "text") {
       return (
@@ -70,11 +68,13 @@ const Message: React.FC<MessageProps> = React.memo(
             }`}
           >
             <CardContent className="p-4">
-              {renderAttachments()}
               {message.role === "user" ? (
                 <div className="break-words">{message.content}</div>
               ) : (
-                renderMarkdownContent(message.content)
+                <>
+                  {renderMarkdownContent(message.content)}
+                  {renderCitations()}
+                </>
               )}
             </CardContent>
           </Card>
@@ -216,41 +216,6 @@ const Message: React.FC<MessageProps> = React.memo(
                 </Button>
               )}
             </div>
-          </CardContent>
-        </Card>
-      );
-    } else if (message.type === "research") {
-      return (
-        <Card className="mb-4 border border-gray-200 shadow-sm">
-          <CardHeader className="border-b border-gray-200">
-            <CardTitle className="flex items-center space-x-2 text-sm">
-              <BookOpen size={16} />
-              <span>Research Results</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4">
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 max-h-60 overflow-y-auto">
-              {renderMarkdownContent(message.content)}
-            </div>
-            {message.citations && message.citations.length > 0 && (
-              <div className="mt-4">
-                <h4 className="text-xs font-semibold mb-2">Citations:</h4>
-                <ol className="list-decimal list-inside text-xs text-gray-600">
-                  {message.citations.map((citation, index) => (
-                    <li key={index} className="mb-1 break-words">
-                      <a
-                        href={citation}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="hover:underline"
-                      >
-                        {citation}
-                      </a>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
           </CardContent>
         </Card>
       );

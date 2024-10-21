@@ -6,6 +6,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronRight, ChevronDown, X } from 'lucide-react';
 import { Button } from "@/components/ui/button";
+import { Input } from '@/components/ui/input';
 
 type Source = 'General Web' | 'Codes and Regulations' | 'Caselaw';
 type Jurisdiction = 'Federal' | 'Alabama' | 'Alaska' | 'Arizona' | 'Arkansas' | 'California' | 'Colorado' | 'Connecticut' | 'Delaware' | 'Florida' | 'Georgia' | 'Hawaii' | 'Idaho' | 'Illinois' | 'Indiana' | 'Iowa' | 'Kansas' | 'Kentucky' | 'Louisiana' | 'Maine' | 'Maryland' | 'Massachusetts' | 'Michigan' | 'Minnesota' | 'Mississippi' | 'Missouri' | 'Montana' | 'Nebraska' | 'Nevada' | 'New Hampshire' | 'New Jersey' | 'New Mexico' | 'New York' | 'North Carolina' | 'North Dakota' | 'Ohio' | 'Oklahoma' | 'Oregon' | 'Pennsylvania' | 'Rhode Island' | 'South Carolina' | 'South Dakota' | 'Tennessee' | 'Texas' | 'Utah' | 'Vermont' | 'Virginia' | 'Washington' | 'West Virginia' | 'Wisconsin' | 'Wyoming';
@@ -13,11 +14,11 @@ type Jurisdiction = 'Federal' | 'Alabama' | 'Alaska' | 'Arizona' | 'Arkansas' | 
 interface SourcesProps {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
-  onSourceSelect: (source: string) => void;
-  currentSource: string;
+  onSourceSelect: (sources: string[]) => void;
+  currentSources: string[];
 }
 
-const Sources: React.FC<SourcesProps> = ({ isOpen, setIsOpen, onSourceSelect, currentSource }) => {
+const Sources: React.FC<SourcesProps> = ({ isOpen, setIsOpen, onSourceSelect, currentSources }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedSections, setExpandedSections] = useState<Record<Source, boolean>>({
     'General Web': true,
@@ -35,8 +36,10 @@ const Sources: React.FC<SourcesProps> = ({ isOpen, setIsOpen, onSourceSelect, cu
   };
 
   const handleSelect = (source: string) => {
-    onSourceSelect(source);
-    setIsOpen(false);
+    const updatedSources = currentSources.includes(source)
+      ? currentSources.filter(s => s !== source)
+      : [...currentSources, source];
+    onSourceSelect(updatedSources);
   };
 
   const handleClear = () => {
@@ -53,7 +56,7 @@ const Sources: React.FC<SourcesProps> = ({ isOpen, setIsOpen, onSourceSelect, cu
     return sources.map(source => ({
       source,
       items: source === 'General Web'
-        ? ['General Web'].filter(item => item.toLowerCase().includes(lowerQuery))
+        ? [source].filter(item => item.toLowerCase().includes(lowerQuery))
         : jurisdictions.filter(j => 
             j.toLowerCase().includes(lowerQuery) || 
             `${j} ${source}`.toLowerCase().includes(lowerQuery)
@@ -98,12 +101,21 @@ const Sources: React.FC<SourcesProps> = ({ isOpen, setIsOpen, onSourceSelect, cu
                   {expandedSections[source] && items.map((item) => (
                     <CommandItem 
                       key={`${source}-${item}`}
-                      onSelect={() => handleSelect(source === 'General Web' ? 'General Web' : `${item} ${source}`)}
+                      onSelect={() => handleSelect(source === 'General Web' ? source : `${item} ${source}`)}
                       className="ml-6 cursor-pointer hover:bg-gray-100"
                     >
-                      <span className="text-sm">
-                        {source === 'General Web' ? 'General Web' : `${item} ${source}`}
-                      </span>
+                      <div className="flex items-center">
+                        <Input
+                          type="checkbox"
+                          checked={currentSources.includes(source === 'General Web' ? source : `${item} ${source}`)}
+                          onChange={() => {}}
+                          className="mr-2 h-3 w-3"
+                          style={{ accentColor: 'black' }}
+                        />
+                        <span className="text-sm">
+                          {source === 'General Web' ? source : `${item} ${source}`}
+                        </span>
+                      </div>
                     </CommandItem>
                   ))}
                 </CommandGroup>

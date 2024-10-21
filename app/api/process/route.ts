@@ -10,6 +10,7 @@ export async function POST(request: Request) {
   const editorContent = formData.get('editorContent') as string;
   const inputMode = formData.get('inputMode') as InputMode;
   const conversationHistory = JSON.parse(formData.get('conversationHistory') as string) as Message[];
+  const selectedSources = JSON.parse(formData.get('selectedSources') as string) as string[];
 
   if (!input || !inputMode) {
     return NextResponse.json({ error: 'Invalid request format' }, { status: 400 });
@@ -26,17 +27,10 @@ export async function POST(request: Request) {
     let response;
     switch (inputMode) {
       case 'question':
-        response = await handleQuestionMode(input, editorContent, referenceContent, conversationHistory);
+        response = await handleQuestionMode(input, editorContent, referenceContent, conversationHistory, selectedSources);
         break;
       case 'edit':
         response = await handleEditMode(input, editorContent, referenceContent);
-        break;
-      case 'draft':
-        response = await handleDraftMode(input, editorContent, referenceContent);
-        break;
-      case 'research':
-        const researchSource = formData.get('researchSource') as string;
-        response = await handleResearchMode(input, researchSource);
         break;
       default:
         return NextResponse.json({ error: 'Invalid input mode' }, { status: 400 });
@@ -49,8 +43,9 @@ export async function POST(request: Request) {
   }
 }
 
-async function handleQuestionMode(input: string, editorContent: string, referenceContent: string, conversationHistory: Message[]) {
-  const citation = await findCitation(input, editorContent);
+async function handleQuestionMode(input: string, editorContent: string, referenceContent: string, conversationHistory: Message[], selectedSources: string[]) {
+  const { content, citations } = await performRAG(input, selectedSources, editorContent);
+  
   const assistantReply = await generateText({
     model: openai("gpt-4o"),
     messages: [
@@ -58,13 +53,13 @@ async function handleQuestionMode(input: string, editorContent: string, referenc
         role: "system",
         content: `You are an AI assistant specialized in law practices, regulations, and related topics. Your primary users are attorneys. Adhere to these guidelines:
 
-        1. Provide concise, accurate answers based on the document content your understanding of various legal practices.
-        2. Prioritize information from the document content when answering questions.
+        1. Provide concise, accurate answers based on the document content, your understanding of various legal practices, and the additional context provided.
+        2. Prioritize information from the selected sources when answering questions.
         3. Use the knowledge base context to inform your answers, but do not explicitly reference it.
-        4. Keep answers brief and to the point. Typically, one or two sentences should suffice.
+        4. Keep answers brief and to the point. Typically, one or two paragraphs should suffice.
         5. Use Markdown for formatting, but use it sparingly. Bold only key terms or figures.
         6. Do not use headers or lengthy explanations unless specifically requested.
-        7. Never mention "context" or reference sources outside the document.
+        7. Never mention "context" or reference sources outside the provided information.
         8. If more information is needed, wait for the user to ask follow-up questions.
         9. Assume the user is somewhat knowledgeable about law; avoid explaining basic concepts.
 
@@ -72,7 +67,10 @@ async function handleQuestionMode(input: string, editorContent: string, referenc
         ${editorContent}
 
         Reference Document Content:
-        ${referenceContent}`,
+        ${referenceContent}
+
+        Additional Context:
+        ${content}`,
       },
       ...conversationHistory,
       { role: "user", content: input },
@@ -83,56 +81,18 @@ async function handleQuestionMode(input: string, editorContent: string, referenc
   return {
     type: 'question',
     reply: assistantReply.text,
-    citation,
+    citations,
   };
 }
 
 async function handleEditMode(input: string, editorContent: string, referenceContent: string) {
-  const analysisResult = await analyzeDocument(editorContent, input, referenceContent);
-  return { type: 'edit', ...analysisResult };
-}
-
-async function handleDraftMode(input: string, editorContent: string, referenceContent: string) {
-  const draftedContent = await draftContent(input, editorContent, referenceContent);
-  return { type: 'draft', draftContent: draftedContent };
-}
-
-async function handleResearchMode(input: string, researchSource: string) {
-  const { content, citations } = await performRAG(input, researchSource);
-  return { type: 'research', researchResult: content, citations };
-}
-
-async function findCitation(question: string, documentContent: string): Promise<string | null> {
-  const response = await generateText({
-    model: openai("gpt-4o-mini"),
-    messages: [
-      {
-        role: "system",
-        content: `You are an AI assistant specialized in analyzing legal documents. Your task is to find a specific citation in the document that answers the given question. Follow these guidelines strictly:
-
-        1. Return ONLY the shortest, most essential phrase that directly answers the question. This should typically be 2-5 words.
-        2. The returned text MUST be an exact, contiguous substring of the document content. Do not modify or rephrase the text in any way.
-        3. Choose the most unique phrase possible to ensure it can be easily located in the document.
-        4. If there are multiple occurrences of the phrase, choose the one most relevant to the question.
-        5. If the question cannot be answered with a specific short phrase, return "No specific citation found."
-        6. Do not add any quotation marks or additional formatting to the citation.
-        7. Ensure the phrase is short enough that it's unlikely to be broken across lines in the document.
-
-        Example:
-        Question: "What is the management fee?"
-        Bad Answer: "Through the end of the Investment Period, the Manager will receive an annual management fee equal to 2% of committed capital"
-        Good Answer: "2% of committed capital"`,
-      },
-      {
-        role: "user",
-        content: `Question: ${question}\n\nDocument Content: ${documentContent}`,
-      },
-    ],
-    maxTokens: 50,
-  });
-
-  const citation = response.text.trim() || "No specific citation found.";
-  return citation === "No specific citation found." ? null : citation;
+  if (input.toLowerCase().includes('draft') || input.toLowerCase().includes('create')) {
+    const draftedContent = await draftContent(input, editorContent, referenceContent);
+    return { type: 'draft', draftContent: draftedContent };
+  } else {
+    const analysisResult = await analyzeDocument(editorContent, input, referenceContent);
+    return { type: 'edit', ...analysisResult };
+  }
 }
 
 async function analyzeDocument(content: string, command: string, referenceContent: string): Promise<{ changes: Change[], updatedContent: string }> {
@@ -218,13 +178,14 @@ async function draftContent(input: string, documentContent: string, referenceCon
   return response.text;
 }
 
-async function performRAG(query: string, category: string): Promise<{ content: string, citations: string[] }> {
+async function performRAG(query: string, selectedSources: string[], documentContent: string): Promise<{ content: string, citations: string[] }> {
   // Implement RAG logic here
   // This would typically involve using a vector database and retrieval system
   // For now, we'll return a placeholder response
+  const sourceContent = selectedSources.map(source => `Content from ${source}`).join('\n');
   return {
-    content: `Research results for query: "${query}" in category: ${category}`,
-    citations: ['https://example.com/citation1', 'https://example.com/citation2'],
+    content: `Additional context for query: "${query}"\n\nSelected sources:\n${sourceContent}\n\nDocument content:\n${documentContent}`,
+    citations: selectedSources.map(source => `https://example.com/${source.toLowerCase().replace(/\s+/g, '-')}`),
   };
 }
 
