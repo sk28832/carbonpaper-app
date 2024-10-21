@@ -1,17 +1,20 @@
+// File: components/Editor/Editor.tsx
 import React, { useRef, useEffect, useCallback, useState } from "react";
 import Toolbar from "./Toolbar";
 import HoveringFormatBar from "./HoveringFormatBar";
 import { useEditorState } from "./useEditorState";
-import { FileItem } from "@/types/fileTypes";
+import { FileItem, TrackedChanges } from "@/types/fileTypes";
 
 interface EditorProps {
   currentFile: FileItem;
   onContentChange: (content: string) => void;
+  onTrackedChangesUpdate: (trackedChanges: TrackedChanges | null) => void;
 }
 
 const Editor: React.FC<EditorProps> = ({
   currentFile,
   onContentChange,
+  onTrackedChangesUpdate,
 }) => {
   const {
     html,
@@ -40,14 +43,25 @@ const Editor: React.FC<EditorProps> = ({
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const isInitializedRef = useRef(false);
-  const [hoveringBarPosition, setHoveringBarPosition] = useState<{ top: number; left: number } | null>(null);
+  const [hoveringBarPosition, setHoveringBarPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
   const [selectedText, setSelectedText] = useState<string>("");
-  const [aiSuggestion, setAiSuggestion] = useState<{ original: string; suggested: string } | null>(null);
+  const [trackedChanges, setTrackedChanges] = useState<TrackedChanges | null>(
+    currentFile.trackedChanges
+  );
   const [isSelecting, setIsSelecting] = useState(false);
 
   useEffect(() => {
     setHtml(currentFile.content);
-  }, [currentFile.id, currentFile.content, setHtml]);
+    setTrackedChanges(currentFile.trackedChanges);
+  }, [
+    currentFile.id,
+    currentFile.content,
+    currentFile.trackedChanges,
+    setHtml,
+  ]);
 
   const initializeIframe = useCallback(() => {
     if (iframeRef.current) {
@@ -91,6 +105,9 @@ const Editor: React.FC<EditorProps> = ({
                   word-wrap: break-word;
                   word-break: break-word;
                 }
+                .tracked-change {
+                  background-color: #ffff00;
+                }
                 @media print {
                   body {
                     background-color: white;
@@ -132,43 +149,68 @@ const Editor: React.FC<EditorProps> = ({
     }
   }, [html]);
 
-  const attachIframeListeners = useCallback((doc: Document) => {
-    const updateHtml = () => {
-      const content = doc.getElementById("editor-content")!.innerHTML;
-      if (content !== html) {
-        setHtml(content);
-        onContentChange(content);
-      }
-    };
-
-    const updateFormatting = () => {
-      const selection = doc.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        const parentElement = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
-          ? range.commonAncestorContainer.parentElement
-          : range.commonAncestorContainer as HTMLElement;
-
-        if (parentElement) {
-          const computedStyle = window.getComputedStyle(parentElement);
-          setCurrentFont(computedStyle.fontFamily.split(',')[0].replace(/['"]+/g, ''));
-          setCurrentSize(Math.round(parseFloat(computedStyle.fontSize)).toString());
-          setIsBold(computedStyle.fontWeight === 'bold' || parseInt(computedStyle.fontWeight) >= 700);
-          setIsItalic(computedStyle.fontStyle === 'italic');
-          setIsUnderline(computedStyle.textDecoration.includes('underline'));
-          setTextAlign(computedStyle.textAlign as 'left' | 'center' | 'right' | 'justify');
+  const attachIframeListeners = useCallback(
+    (doc: Document) => {
+      const updateHtml = () => {
+        const content = doc.getElementById("editor-content")!.innerHTML;
+        if (content !== html) {
+          setHtml(content);
+          onContentChange(content);
         }
-      }
-    };
+      };
 
-    doc.getElementById("editor-content")!.addEventListener("input", updateHtml);
-    doc.addEventListener("selectionchange", updateFormatting);
-    doc.addEventListener("mousedown", () => setIsSelecting(true));
-    doc.addEventListener("mouseup", () => {
-      setIsSelecting(false);
-      handleSelectionChange();
-    });
-  }, [html, setHtml, setCurrentFont, setCurrentSize, setIsBold, setIsItalic, setIsUnderline, setTextAlign, onContentChange]);
+      const updateFormatting = () => {
+        const selection = doc.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          const parentElement =
+            range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+              ? range.commonAncestorContainer.parentElement
+              : (range.commonAncestorContainer as HTMLElement);
+
+          if (parentElement) {
+            const computedStyle = window.getComputedStyle(parentElement);
+            setCurrentFont(
+              computedStyle.fontFamily.split(",")[0].replace(/['"]+/g, "")
+            );
+            setCurrentSize(
+              Math.round(parseFloat(computedStyle.fontSize)).toString()
+            );
+            setIsBold(
+              computedStyle.fontWeight === "bold" ||
+                parseInt(computedStyle.fontWeight) >= 700
+            );
+            setIsItalic(computedStyle.fontStyle === "italic");
+            setIsUnderline(computedStyle.textDecoration.includes("underline"));
+            setTextAlign(
+              computedStyle.textAlign as "left" | "center" | "right" | "justify"
+            );
+          }
+        }
+      };
+
+      doc
+        .getElementById("editor-content")!
+        .addEventListener("input", updateHtml);
+      doc.addEventListener("selectionchange", updateFormatting);
+      doc.addEventListener("mousedown", () => setIsSelecting(true));
+      doc.addEventListener("mouseup", () => {
+        setIsSelecting(false);
+        handleSelectionChange();
+      });
+    },
+    [
+      html,
+      setHtml,
+      setCurrentFont,
+      setCurrentSize,
+      setIsBold,
+      setIsItalic,
+      setIsUnderline,
+      setTextAlign,
+      onContentChange,
+    ]
+  );
 
   const applyFormatting = useCallback(
     (command: string, value: string = "") => {
@@ -176,9 +218,13 @@ const Editor: React.FC<EditorProps> = ({
         const doc = iframeRef.current.contentDocument;
         if (doc) {
           doc.execCommand("styleWithCSS", false, "true");
-          
+
           if (command === "fontSize") {
-            doc.execCommand(command, false, (parseInt(value, 10) / 16).toString());
+            doc.execCommand(
+              command,
+              false,
+              (parseInt(value, 10) / 16).toString()
+            );
           } else {
             doc.execCommand(command, false, value);
           }
@@ -197,45 +243,176 @@ const Editor: React.FC<EditorProps> = ({
     [setHtml, onContentChange]
   );
 
-  const handleAiAction = useCallback(async (action: string) => {
-    if (iframeRef.current) {
-      const doc = iframeRef.current.contentDocument;
-      if (doc) {
-        const selection = doc.getSelection();
-        if (selection && !selection.isCollapsed) {
-          const range = selection.getRangeAt(0);
-          const selectedText = selection.toString();
-          
-          try {
-            const response = await fetch("/api/hoverbar", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ selectedText, command: action }),
-            });
-            const suggestion = await response.json();
-            
-            // Directly replace the text
-            const span = doc.createElement('span');
-            span.innerHTML = suggestion.text;
-            range.deleteContents();
-            range.insertNode(span);
-            
-            // Update the HTML and trigger content change
-            const newContent = doc.getElementById("editor-content")!.innerHTML;
-            setHtml(newContent);
-            onContentChange(newContent);
-            
-            // Clear the selection
-            selection.removeAllRanges();
-          } catch (error) {
-            console.error("Error fetching AI suggestion:", error);
+  const handleAiAction = useCallback(
+    async (action: string) => {
+      if (iframeRef.current) {
+        const doc = iframeRef.current.contentDocument;
+        if (doc) {
+          const selection = doc.getSelection();
+          if (selection && !selection.isCollapsed) {
+            const range = selection.getRangeAt(0);
+            const selectedText = selection.toString();
+
+            try {
+              const response = await fetch("/api/hoverbar", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ selectedText, command: action }),
+              });
+              const suggestion = await response.json();
+
+              const newTrackedChanges: TrackedChanges = {
+                original: selectedText,
+                versions: [suggestion.text],
+                currentVersionIndex: 0,
+              };
+
+              setTrackedChanges(newTrackedChanges);
+              onTrackedChangesUpdate(newTrackedChanges);
+
+              // Highlight the changed text
+              const span = doc.createElement("span");
+              span.innerHTML = suggestion.text;
+              span.className = "tracked-change";
+              range.deleteContents();
+              range.insertNode(span);
+
+              // Update the content
+              const newContent =
+                doc.getElementById("editor-content")!.innerHTML;
+              setHtml(newContent);
+              onContentChange(newContent);
+            } catch (error) {
+              console.error("Error fetching AI suggestion:", error);
+            }
           }
         }
       }
+    },
+    [setHtml, onContentChange, onTrackedChangesUpdate]
+  );
+
+  const handleAcceptChanges = useCallback(() => {
+    if (trackedChanges && iframeRef.current) {
+      const doc = iframeRef.current.contentDocument;
+      if (doc) {
+        const trackedChangeElements =
+          doc.getElementsByClassName("tracked-change");
+        if (trackedChangeElements.length > 0) {
+          const element = trackedChangeElements[0];
+          element.classList.remove("tracked-change");
+        }
+
+        const newContent = doc.getElementById("editor-content")!.innerHTML;
+        setHtml(newContent);
+        onContentChange(newContent);
+        setTrackedChanges(null);
+        onTrackedChangesUpdate(null);
+      }
     }
-  }, [setHtml, onContentChange]);
+  }, [trackedChanges, setHtml, onContentChange, onTrackedChangesUpdate]);
+
+  const handleRejectChanges = useCallback(() => {
+    if (trackedChanges && iframeRef.current) {
+      const doc = iframeRef.current.contentDocument;
+      if (doc) {
+        const trackedChangeElements =
+          doc.getElementsByClassName("tracked-change");
+        if (trackedChangeElements.length > 0) {
+          const element = trackedChangeElements[0];
+          element.innerHTML = trackedChanges.original;
+          element.classList.remove("tracked-change");
+        }
+
+        const newContent = doc.getElementById("editor-content")!.innerHTML;
+        setHtml(newContent);
+        onContentChange(newContent);
+        setTrackedChanges(null);
+        onTrackedChangesUpdate(null);
+      }
+    }
+  }, [trackedChanges, setHtml, onContentChange, onTrackedChangesUpdate]);
+
+  const handleNavigateVersion = useCallback(
+    (direction: "prev" | "next") => {
+      if (trackedChanges && iframeRef.current) {
+        const doc = iframeRef.current.contentDocument;
+        if (doc) {
+          const newIndex =
+            direction === "prev"
+              ? Math.max(0, trackedChanges.currentVersionIndex - 1)
+              : Math.min(
+                  trackedChanges.versions.length - 1,
+                  trackedChanges.currentVersionIndex + 1
+                );
+
+          const newTrackedChanges = {
+            ...trackedChanges,
+            currentVersionIndex: newIndex,
+          };
+
+          const trackedChangeElements =
+            doc.getElementsByClassName("tracked-change");
+          if (trackedChangeElements.length > 0) {
+            const element = trackedChangeElements[0];
+            element.innerHTML = newTrackedChanges.versions[newIndex];
+          }
+
+          const newContent = doc.getElementById("editor-content")!.innerHTML;
+          setHtml(newContent);
+          onContentChange(newContent);
+          setTrackedChanges(newTrackedChanges);
+          onTrackedChangesUpdate(newTrackedChanges);
+        }
+      }
+    },
+    [trackedChanges, setHtml, onContentChange, onTrackedChangesUpdate]
+  );
+
+  const handleReprocessChanges = useCallback(async () => {
+    if (trackedChanges && iframeRef.current) {
+      const doc = iframeRef.current.contentDocument;
+      if (doc) {
+        try {
+          const response = await fetch("/api/hoverbar", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              selectedText:
+                trackedChanges.versions[trackedChanges.currentVersionIndex],
+              command: "improve",
+            }),
+          });
+          const suggestion = await response.json();
+
+          const newTrackedChanges = {
+            ...trackedChanges,
+            versions: [...trackedChanges.versions, suggestion.text],
+            currentVersionIndex: trackedChanges.versions.length,
+          };
+
+          const trackedChangeElements =
+            doc.getElementsByClassName("tracked-change");
+          if (trackedChangeElements.length > 0) {
+            const element = trackedChangeElements[0];
+            element.innerHTML = suggestion.text;
+          }
+
+          const newContent = doc.getElementById("editor-content")!.innerHTML;
+          setHtml(newContent);
+          onContentChange(newContent);
+          setTrackedChanges(newTrackedChanges);
+          onTrackedChangesUpdate(newTrackedChanges);
+        } catch (error) {
+          console.error("Error reprocessing changes:", error);
+        }
+      }
+    }
+  }, [trackedChanges, setHtml, onContentChange, onTrackedChangesUpdate]);
 
   const updateFormattingState = (doc: Document) => {
     const selection = doc.getSelection();
@@ -245,12 +422,19 @@ const Editor: React.FC<EditorProps> = ({
       range.surroundContents(span);
 
       const computedStyle = window.getComputedStyle(span);
-      setCurrentFont(computedStyle.fontFamily.split(',')[0].replace(/['"]+/g, ''));
+      setCurrentFont(
+        computedStyle.fontFamily.split(",")[0].replace(/['"]+/g, "")
+      );
       setCurrentSize(Math.round(parseFloat(computedStyle.fontSize)).toString());
-      setIsBold(computedStyle.fontWeight === 'bold' || parseInt(computedStyle.fontWeight) >= 700);
-      setIsItalic(computedStyle.fontStyle === 'italic');
-      setIsUnderline(computedStyle.textDecoration.includes('underline'));
-      setTextAlign(computedStyle.textAlign as 'left' | 'center' | 'right' | 'justify');
+      setIsBold(
+        computedStyle.fontWeight === "bold" ||
+          parseInt(computedStyle.fontWeight) >= 700
+      );
+      setIsItalic(computedStyle.fontStyle === "italic");
+      setIsUnderline(computedStyle.textDecoration.includes("underline"));
+      setTextAlign(
+        computedStyle.textAlign as "left" | "center" | "right" | "justify"
+      );
 
       range.extractContents();
       range.insertNode(span.firstChild!);
@@ -313,7 +497,7 @@ const Editor: React.FC<EditorProps> = ({
 
           setHoveringBarPosition({
             top: rect.bottom - iframeRect.top + 5, // Position below the selection
-            left: rect.left - iframeRect.left + (rect.width / 2),
+            left: rect.left - iframeRect.left + rect.width / 2,
           });
           setSelectedText(selection.toString());
         } else {
@@ -322,24 +506,6 @@ const Editor: React.FC<EditorProps> = ({
         }
       }
     }
-  }, []);
-
-  const handleAiSuggestionAccept = useCallback(() => {
-    if (iframeRef.current && aiSuggestion) {
-      const doc = iframeRef.current.contentDocument;
-      if (doc) {
-        const content = doc.getElementById("editor-content")!.innerHTML;
-        const newContent = content.replace(aiSuggestion.original, aiSuggestion.suggested);
-        doc.getElementById("editor-content")!.innerHTML = newContent;
-        setHtml(newContent);
-        onContentChange(newContent);
-        setAiSuggestion(null);
-      }
-    }
-  }, [aiSuggestion, setHtml, onContentChange]);
-
-  const handleAiSuggestionReject = useCallback(() => {
-    setAiSuggestion(null);
   }, []);
 
   useEffect(() => {
@@ -404,6 +570,11 @@ const Editor: React.FC<EditorProps> = ({
           <HoveringFormatBar
             onAiAction={handleAiAction}
             position={hoveringBarPosition}
+            trackedChanges={trackedChanges}
+            onAcceptChanges={handleAcceptChanges}
+            onRejectChanges={handleRejectChanges}
+            onNavigateVersion={handleNavigateVersion}
+            onReprocessChanges={handleReprocessChanges}
           />
         )}
       </div>

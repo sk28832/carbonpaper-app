@@ -1,6 +1,6 @@
 // File: lib/mockDb.ts
 
-import { FileItem } from '@/types/fileTypes';
+import { FileItem, TrackedChanges } from '@/types/fileTypes';
 import { Message } from '@/types/chatTypes';
 
 // Declare a global variable to store the database instance
@@ -14,8 +14,8 @@ class MockDatabase {
 
   constructor() {
     this.files = [
-      { id: '1', name: 'Document 1', content: '<p>Content of Document 1</p>', isSaved: true, messages: [] },
-      { id: '2', name: 'Document 2', content: '<p>Content of Document 2</p>', isSaved: true, messages: [] },
+      { id: '1', name: 'Document 1', content: '<p>Content of Document 1</p>', isSaved: true, messages: [], trackedChanges: null },
+      { id: '2', name: 'Document 2', content: '<p>Content of Document 2</p>', isSaved: true, messages: [], trackedChanges: null },
     ];
     this.nextId = 3;
   }
@@ -29,8 +29,8 @@ class MockDatabase {
     return file;
   }
 
-  addFile(file: Omit<FileItem, 'id' | 'messages'>): FileItem {
-    const newFile: FileItem = { ...file, id: this.nextId.toString(), messages: [] };
+  addFile(file: Omit<FileItem, 'id' | 'messages' | 'trackedChanges'>): FileItem {
+    const newFile: FileItem = { ...file, id: this.nextId.toString(), messages: [], trackedChanges: null };
     this.nextId++;
     this.files.push(newFile);
     return newFile;
@@ -55,7 +55,6 @@ class MockDatabase {
     if (file) {
       file.messages.push(message);
       this.updateFile(file);
-    } else {
     }
   }
 
@@ -69,7 +68,14 @@ class MockDatabase {
     if (file) {
       file.messages = messages;
       this.updateFile(file);
-    } else {
+    }
+  }
+
+  updateTrackedChanges(fileId: string, trackedChanges: TrackedChanges | null): void {
+    const file = this.getFile(fileId);
+    if (file) {
+      file.trackedChanges = trackedChanges;
+      this.updateFile(file);
     }
   }
 }
@@ -79,9 +85,10 @@ const db = global.mockDb || (global.mockDb = new MockDatabase());
 
 export const getAllFiles = () => db.getAllFiles();
 export const getFile = (id: string) => db.getFile(id);
-export const addFile = (file: Omit<FileItem, 'id' | 'messages'>) => db.addFile(file);
+export const addFile = (file: Omit<FileItem, 'id' | 'messages' | 'trackedChanges'>) => db.addFile(file);
 export const updateFile = (file: FileItem) => db.updateFile(file);
 export const deleteFile = (id: string) => db.deleteFile(id);
 export const addChatMessage = (fileId: string, message: Message) => db.addChatMessage(fileId, message);
 export const getChatMessages = (fileId: string) => db.getChatMessages(fileId);
 export const updateChatMessages = (fileId: string, messages: Message[]) => db.updateChatMessages(fileId, messages);
+export const updateTrackedChanges = (fileId: string, trackedChanges: TrackedChanges | null) => db.updateTrackedChanges(fileId, trackedChanges);

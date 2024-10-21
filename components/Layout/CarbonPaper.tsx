@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileItem } from "@/types/fileTypes";
+import { FileItem, TrackedChanges } from "@/types/fileTypes";
 import useDelayedState from "@/hooks/useDelayedState";
 import { Message } from "@/types/chatTypes";
 import {
@@ -25,7 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { addChatMessage, updateFile } from "@/lib/mockDb";
+import { addChatMessage, updateFile, updateTrackedChanges } from "@/lib/mockDb";
 
 interface CarbonPaperProps {
   fileId: string;
@@ -42,6 +42,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [navigationPath, setNavigationPath] = useState("");
+  const [trackedChanges, setTrackedChanges] = useState<TrackedChanges | null>(null);
 
   useEffect(() => {
     const fetchFile = async () => {
@@ -54,6 +55,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           setEditorContent(file.content);
           setEditorTextContent(extractTextFromHtml(file.content));
           setMessages(file.messages || []);
+          setTrackedChanges(file.trackedChanges || null);
         } else {
           console.error("Failed to fetch file");
           router.push("/");
@@ -71,7 +73,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (currentFile && !currentFile.isSaved) {
+      if (currentFile && (!currentFile.isSaved || trackedChanges)) {
         e.preventDefault();
         e.returnValue = "";
       }
@@ -82,7 +84,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [currentFile]);
+  }, [currentFile, trackedChanges]);
 
   const extractTextFromHtml = (html: string): string => {
     const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -104,6 +106,21 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
     [currentFile]
   );
 
+  const handleTrackedChangesUpdate = useCallback(
+    (newTrackedChanges: TrackedChanges | null) => {
+      setTrackedChanges(newTrackedChanges);
+      if (currentFile) {
+        setCurrentFile((prevFile) => ({
+          ...prevFile!,
+          trackedChanges: newTrackedChanges,
+          isSaved: false,
+        }));
+        updateTrackedChanges(currentFile.id, newTrackedChanges);
+      }
+    },
+    [currentFile]
+  );
+
   const handleSave = useCallback(async () => {
     if (currentFile) {
       try {
@@ -111,6 +128,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           ...currentFile,
           content: editorContent,
           messages: messages,
+          trackedChanges: trackedChanges,
           isSaved: true,
         };
         const response = await fetch(`/api/files/${currentFile.id}`, {
@@ -129,7 +147,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
         console.error("Error saving file:", error);
       }
     }
-  }, [currentFile, editorContent, messages]);
+  }, [currentFile, editorContent, messages, trackedChanges]);
 
   const handleNameChange = useCallback(
     async (newName: string) => {
@@ -176,21 +194,21 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   }, [currentFile]);
 
   const handleNavigation = useCallback((path: string) => {
-    if (currentFile && !currentFile.isSaved) {
+    if (currentFile && (!currentFile.isSaved || trackedChanges)) {
       setShowSaveDialog(true);
       setNavigationPath(path);
     } else {
       router.push(path);
     }
-  }, [currentFile, router]);
+  }, [currentFile, trackedChanges, router]);
 
   const handleConfirmNavigation = useCallback(async () => {
     setShowSaveDialog(false);
-    if (currentFile && !currentFile.isSaved) {
+    if (currentFile && (!currentFile.isSaved || trackedChanges)) {
       await handleSave();
     }
     router.push(navigationPath);
-  }, [navigationPath, router, currentFile, handleSave]);
+  }, [navigationPath, router, currentFile, trackedChanges, handleSave]);
 
   const handleCancelNavigation = useCallback(() => {
     setShowSaveDialog(false);
@@ -199,13 +217,13 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
 
   useEffect(() => {
     const saveInterval = setInterval(() => {
-      if (currentFile && !currentFile.isSaved) {
+      if (currentFile && (!currentFile.isSaved || trackedChanges)) {
         handleSave();
       }
     }, 30000); // Auto-save every 30 seconds if there are unsaved changes
 
     return () => clearInterval(saveInterval);
-  }, [currentFile, handleSave]);
+  }, [currentFile, trackedChanges, handleSave]);
 
   const LoadingSkeleton = () => (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -259,20 +277,20 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
                   variant="ghost"
                   size="sm"
                   onClick={handleSave}
-                  disabled={currentFile.isSaved}
+                  disabled={currentFile.isSaved && !trackedChanges}
                   className="text-gray-600 hover:text-gray-900"
                 >
                   <Save className="h-5 w-5" />
                 </Button>
                 <Badge
-                  variant={currentFile.isSaved ? "secondary" : "outline"}
+                  variant={currentFile.isSaved && !trackedChanges ? "secondary" : "outline"}
                   className={`text-xs px-2 py-1 transition-all duration-300 ${
-                    currentFile.isSaved
+                    currentFile.isSaved && !trackedChanges
                       ? "bg-gray-200 text-gray-700"
                       : "bg-white text-gray-500 border-gray-300"
                   }`}
                 >
-                  {currentFile.isSaved ? "Saved" : "Unsaved"}
+                  {currentFile.isSaved && !trackedChanges ? "Saved" : "Unsaved"}
                 </Badge>
               </div>
               <Button
@@ -290,6 +308,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
                 <Editor
                   currentFile={currentFile}
                   onContentChange={handleContentChange}
+                  onTrackedChangesUpdate={handleTrackedChangesUpdate}
                 />
               </div>
               <AnimatePresence>
