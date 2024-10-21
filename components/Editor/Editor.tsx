@@ -1,6 +1,6 @@
-// File: components/Editor/Editor.tsx
-import React, { useRef, useEffect, useCallback } from "react";
+import React, { useRef, useEffect, useCallback, useState } from "react";
 import Toolbar from "./Toolbar";
+import HoveringFormatBar from "./HoveringFormatBar";
 import { useEditorState } from "./useEditorState";
 import { FileItem } from "@/types/fileTypes";
 
@@ -40,21 +40,16 @@ const Editor: React.FC<EditorProps> = ({
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const isInitializedRef = useRef(false);
-
-  useEffect(() => {
-    if (!isInitializedRef.current) {
-      initializeIframe();
-      isInitializedRef.current = true;
-    } else {
-      updateIframeContent();
-    }
-  }, [html]);
+  const [hoveringBarPosition, setHoveringBarPosition] = useState<{ top: number; left: number } | null>(null);
+  const [selectedText, setSelectedText] = useState<string>("");
+  const [aiSuggestion, setAiSuggestion] = useState<{ original: string; suggested: string } | null>(null);
+  const [isSelecting, setIsSelecting] = useState(false);
 
   useEffect(() => {
     setHtml(currentFile.content);
   }, [currentFile.id, currentFile.content, setHtml]);
 
-  const initializeIframe = () => {
+  const initializeIframe = useCallback(() => {
     if (iframeRef.current) {
       const doc = iframeRef.current.contentDocument;
       if (doc) {
@@ -126,18 +121,18 @@ const Editor: React.FC<EditorProps> = ({
         doc.getElementById("editor-content")!.innerHTML = html || "";
       }
     }
-  };
+  }, [html]);
 
-  const updateIframeContent = () => {
+  const updateIframeContent = useCallback(() => {
     if (iframeRef.current) {
       const doc = iframeRef.current.contentDocument;
       if (doc && doc.getElementById("editor-content")!.innerHTML !== html) {
         doc.getElementById("editor-content")!.innerHTML = html;
       }
     }
-  };
+  }, [html]);
 
-  const attachIframeListeners = (doc: Document) => {
+  const attachIframeListeners = useCallback((doc: Document) => {
     const updateHtml = () => {
       const content = doc.getElementById("editor-content")!.innerHTML;
       if (content !== html) {
@@ -168,7 +163,12 @@ const Editor: React.FC<EditorProps> = ({
 
     doc.getElementById("editor-content")!.addEventListener("input", updateHtml);
     doc.addEventListener("selectionchange", updateFormatting);
-  };
+    doc.addEventListener("mousedown", () => setIsSelecting(true));
+    doc.addEventListener("mouseup", () => {
+      setIsSelecting(false);
+      handleSelectionChange();
+    });
+  }, [html, setHtml, setCurrentFont, setCurrentSize, setIsBold, setIsItalic, setIsUnderline, setTextAlign, onContentChange]);
 
   const applyFormatting = useCallback(
     (command: string, value: string = "") => {
@@ -187,48 +187,75 @@ const Editor: React.FC<EditorProps> = ({
           setHtml(newContent);
           onContentChange(newContent);
 
-          const selection = doc.getSelection();
-          if (selection && selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            const span = doc.createElement("span");
-            range.surroundContents(span);
-
-            const computedStyle = window.getComputedStyle(span);
-            setCurrentFont(computedStyle.fontFamily.split(',')[0].replace(/['"]+/g, ''));
-            setCurrentSize(Math.round(parseFloat(computedStyle.fontSize)).toString());
-            setIsBold(computedStyle.fontWeight === 'bold' || parseInt(computedStyle.fontWeight) >= 700);
-            setIsItalic(computedStyle.fontStyle === 'italic');
-            setIsUnderline(computedStyle.textDecoration.includes('underline'));
-            setTextAlign(computedStyle.textAlign as 'left' | 'center' | 'right' | 'justify');
-
-            if (command === "foreColor") {
-              setCurrentColor(value);
-            } else if (command === "hiliteColor") {
-              setCurrentHighlight(value === "transparent" ? "none" : value);
-            }
-
-            range.extractContents();
-            range.insertNode(span.firstChild!);
-          }
+          updateFormattingState(doc);
 
           iframeRef.current.focus();
           doc.getElementById("editor-content")!.focus();
         }
       }
     },
-    [
-      setHtml,
-      setCurrentFont,
-      setCurrentSize,
-      setCurrentColor,
-      setCurrentHighlight,
-      setIsBold,
-      setIsItalic,
-      setIsUnderline,
-      setTextAlign,
-      onContentChange,
-    ]
+    [setHtml, onContentChange]
   );
+
+  const handleAiAction = useCallback(async (action: string) => {
+    if (iframeRef.current) {
+      const doc = iframeRef.current.contentDocument;
+      if (doc) {
+        const selection = doc.getSelection();
+        if (selection && !selection.isCollapsed) {
+          const range = selection.getRangeAt(0);
+          const selectedText = selection.toString();
+          
+          try {
+            const response = await fetch("/api/hoverbar", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ selectedText, command: action }),
+            });
+            const suggestion = await response.json();
+            
+            // Directly replace the text
+            const span = doc.createElement('span');
+            span.innerHTML = suggestion.text;
+            range.deleteContents();
+            range.insertNode(span);
+            
+            // Update the HTML and trigger content change
+            const newContent = doc.getElementById("editor-content")!.innerHTML;
+            setHtml(newContent);
+            onContentChange(newContent);
+            
+            // Clear the selection
+            selection.removeAllRanges();
+          } catch (error) {
+            console.error("Error fetching AI suggestion:", error);
+          }
+        }
+      }
+    }
+  }, [setHtml, onContentChange]);
+
+  const updateFormattingState = (doc: Document) => {
+    const selection = doc.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      const span = doc.createElement("span");
+      range.surroundContents(span);
+
+      const computedStyle = window.getComputedStyle(span);
+      setCurrentFont(computedStyle.fontFamily.split(',')[0].replace(/['"]+/g, ''));
+      setCurrentSize(Math.round(parseFloat(computedStyle.fontSize)).toString());
+      setIsBold(computedStyle.fontWeight === 'bold' || parseInt(computedStyle.fontWeight) >= 700);
+      setIsItalic(computedStyle.fontStyle === 'italic');
+      setIsUnderline(computedStyle.textDecoration.includes('underline'));
+      setTextAlign(computedStyle.textAlign as 'left' | 'center' | 'right' | 'justify');
+
+      range.extractContents();
+      range.insertNode(span.firstChild!);
+    }
+  };
 
   const clearFormatting = useCallback(() => {
     if (iframeRef.current) {
@@ -274,6 +301,73 @@ const Editor: React.FC<EditorProps> = ({
     }
   }, []);
 
+  const handleSelectionChange = useCallback(() => {
+    if (iframeRef.current) {
+      const doc = iframeRef.current.contentDocument;
+      if (doc) {
+        const selection = doc.getSelection();
+        if (selection && !selection.isCollapsed) {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          const iframeRect = iframeRef.current.getBoundingClientRect();
+
+          setHoveringBarPosition({
+            top: rect.bottom - iframeRect.top + 5, // Position below the selection
+            left: rect.left - iframeRect.left + (rect.width / 2),
+          });
+          setSelectedText(selection.toString());
+        } else {
+          setHoveringBarPosition(null);
+          setSelectedText("");
+        }
+      }
+    }
+  }, []);
+
+  const handleAiSuggestionAccept = useCallback(() => {
+    if (iframeRef.current && aiSuggestion) {
+      const doc = iframeRef.current.contentDocument;
+      if (doc) {
+        const content = doc.getElementById("editor-content")!.innerHTML;
+        const newContent = content.replace(aiSuggestion.original, aiSuggestion.suggested);
+        doc.getElementById("editor-content")!.innerHTML = newContent;
+        setHtml(newContent);
+        onContentChange(newContent);
+        setAiSuggestion(null);
+      }
+    }
+  }, [aiSuggestion, setHtml, onContentChange]);
+
+  const handleAiSuggestionReject = useCallback(() => {
+    setAiSuggestion(null);
+  }, []);
+
+  useEffect(() => {
+    if (!isInitializedRef.current) {
+      initializeIframe();
+      isInitializedRef.current = true;
+    } else {
+      updateIframeContent();
+    }
+
+    const currentIframe = iframeRef.current;
+    if (currentIframe) {
+      const doc = currentIframe.contentDocument;
+      if (doc) {
+        doc.addEventListener("selectionchange", handleSelectionChange);
+      }
+    }
+
+    return () => {
+      if (currentIframe) {
+        const doc = currentIframe.contentDocument;
+        if (doc) {
+          doc.removeEventListener("selectionchange", handleSelectionChange);
+        }
+      }
+    };
+  }, [initializeIframe, updateIframeContent, handleSelectionChange]);
+
   return (
     <div className="flex flex-col h-full bg-gray-50">
       <div className="overflow-x-auto">
@@ -299,13 +393,19 @@ const Editor: React.FC<EditorProps> = ({
           refocusEditor={refocusEditor}
         />
       </div>
-      <div className="flex-grow overflow-auto p-4">
+      <div className="flex-grow overflow-auto p-4 relative">
         <iframe
           ref={iframeRef}
           className="w-full h-full border border-gray-200 rounded-lg shadow-sm focus:outline-none bg-white"
           title="CarbonPaper Editor"
           sandbox="allow-same-origin allow-scripts"
         />
+        {!isSelecting && hoveringBarPosition && (
+          <HoveringFormatBar
+            onAiAction={handleAiAction}
+            position={hoveringBarPosition}
+          />
+        )}
       </div>
     </div>
   );

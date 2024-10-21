@@ -122,7 +122,6 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
         });
         if (response.ok) {
           setCurrentFile(updatedFile);
-          console.log("File saved successfully");
         } else {
           console.error("Failed to save file");
         }
@@ -170,7 +169,6 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           messages: [...prevFile!.messages, newMessage],
           isSaved: false,
         }));
-        console.log("Chat message added successfully");
       } catch (error) {
         console.error("Error adding chat message:", error);
       }

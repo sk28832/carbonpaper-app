@@ -69,7 +69,6 @@ const FileExplorer: React.FC = () => {
       const response = await fetch("/api/files");
       if (response.ok) {
         const data = await response.json();
-        console.log("Fetched files:", data);
         setFiles(data);
       } else {
         throw new Error("Failed to fetch files");
@@ -87,12 +86,10 @@ const FileExplorer: React.FC = () => {
   };
 
   const handleFileSelect = async (file: FileItem) => {
-    console.log("Selecting file:", file);
     try {
       const response = await fetch(`/api/files/${file.id}`);
       if (response.ok) {
         const fetchedFile = await response.json();
-        console.log("Fetched file:", fetchedFile);
         router.push(`/editor/${file.id}`);
       } else {
         console.error("Failed to fetch file:", await response.text());
@@ -124,7 +121,6 @@ const FileExplorer: React.FC = () => {
           });
           if (response.ok) {
             const newFile = await response.json();
-            console.log("Uploaded new file:", newFile);
             await fetchFiles(); // Refetch all files instead of just adding the new one
             toast({
               title: "Success",

@@ -21,14 +21,11 @@ class MockDatabase {
   }
 
   getAllFiles(): FileItem[] {
-    console.log("Getting all files:", this.files);
     return this.files;
   }
 
   getFile(id: string): FileItem | undefined {
-    console.log(`Attempting to get file with id: ${id}`);
     const file = this.files.find(f => f.id === id);
-    console.log(file ? `File found: ${JSON.stringify(file)}` : `File not found for id: ${id}`);
     return file;
   }
 
@@ -36,7 +33,6 @@ class MockDatabase {
     const newFile: FileItem = { ...file, id: this.nextId.toString(), messages: [] };
     this.nextId++;
     this.files.push(newFile);
-    console.log(`New file added: ${JSON.stringify(newFile)}`);
     return newFile;
   }
 
@@ -44,18 +40,14 @@ class MockDatabase {
     const index = this.files.findIndex(f => f.id === updatedFile.id);
     if (index !== -1) {
       this.files[index] = updatedFile;
-      console.log(`File updated: ${JSON.stringify(updatedFile)}`);
     } else {
-      console.log(`File not found for update: ${updatedFile.id}`);
       this.files.push(updatedFile);
-      console.log(`New file added during update: ${JSON.stringify(updatedFile)}`);
     }
   }
 
   deleteFile(id: string): void {
     const initialLength = this.files.length;
     this.files = this.files.filter(f => f.id !== id);
-    console.log(`File deleted: ${id}, Files removed: ${initialLength - this.files.length}`);
   }
 
   addChatMessage(fileId: string, message: Message): void {
@@ -63,9 +55,7 @@ class MockDatabase {
     if (file) {
       file.messages.push(message);
       this.updateFile(file);
-      console.log(`Chat message added to file: ${fileId}`);
     } else {
-      console.log(`Failed to add chat message: file not found: ${fileId}`);
     }
   }
 
@@ -79,9 +69,7 @@ class MockDatabase {
     if (file) {
       file.messages = messages;
       this.updateFile(file);
-      console.log(`Chat messages updated for file: ${fileId}`);
     } else {
-      console.log(`Failed to update chat messages: file not found: ${fileId}`);
     }
   }
 }
