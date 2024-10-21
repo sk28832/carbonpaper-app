@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Resizable } from "re-resizable";
 import Editor from "../Editor/Editor";
 import AIChat from "../AIChat/AIChat";
-import { ArrowLeft, Save, MessageSquare, X, Sparkles } from "lucide-react";
+import { ArrowLeft, Save, X, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -42,7 +42,9 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [navigationPath, setNavigationPath] = useState("");
-  const [trackedChanges, setTrackedChanges] = useState<TrackedChanges | null>(null);
+  const [trackedChanges, setTrackedChanges] = useState<TrackedChanges | null>(
+    null
+  );
 
   useEffect(() => {
     const fetchFile = async () => {
@@ -87,7 +89,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   }, [currentFile, trackedChanges]);
 
   const extractTextFromHtml = (html: string): string => {
-    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const doc = new DOMParser().parseFromString(html, "text/html");
     return doc.body.textContent || "";
   };
 
@@ -177,30 +179,36 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
     [currentFile]
   );
 
-  const handleAddMessage = useCallback(async (newMessage: Message) => {
-    if (currentFile) {
-      try {
-        await addChatMessage(currentFile.id, newMessage);
-        setMessages((prevMessages) => [...prevMessages, newMessage]);
-        setCurrentFile((prevFile) => ({
-          ...prevFile!,
-          messages: [...prevFile!.messages, newMessage],
-          isSaved: false,
-        }));
-      } catch (error) {
-        console.error("Error adding chat message:", error);
+  const handleAddMessage = useCallback(
+    async (newMessage: Message) => {
+      if (currentFile) {
+        try {
+          await addChatMessage(currentFile.id, newMessage);
+          setMessages((prevMessages) => [...prevMessages, newMessage]);
+          setCurrentFile((prevFile) => ({
+            ...prevFile!,
+            messages: [...prevFile!.messages, newMessage],
+            isSaved: false,
+          }));
+        } catch (error) {
+          console.error("Error adding chat message:", error);
+        }
       }
-    }
-  }, [currentFile]);
+    },
+    [currentFile]
+  );
 
-  const handleNavigation = useCallback((path: string) => {
-    if (currentFile && (!currentFile.isSaved || trackedChanges)) {
-      setShowSaveDialog(true);
-      setNavigationPath(path);
-    } else {
-      router.push(path);
-    }
-  }, [currentFile, trackedChanges, router]);
+  const handleNavigation = useCallback(
+    (path: string) => {
+      if (currentFile && (!currentFile.isSaved || trackedChanges)) {
+        setShowSaveDialog(true);
+        setNavigationPath(path);
+      } else {
+        router.push(path);
+      }
+    },
+    [currentFile, trackedChanges, router]
+  );
 
   const handleConfirmNavigation = useCallback(async () => {
     setShowSaveDialog(false);
@@ -245,7 +253,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   return (
     <AnimatePresence mode="wait">
       <motion.div
-        key={isLoading ? 'loading' : 'content'}
+        key={isLoading ? "loading" : "content"}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -283,7 +291,11 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
                   <Save className="h-5 w-5" />
                 </Button>
                 <Badge
-                  variant={currentFile.isSaved && !trackedChanges ? "secondary" : "outline"}
+                  variant={
+                    currentFile.isSaved && !trackedChanges
+                      ? "secondary"
+                      : "outline"
+                  }
                   className={`text-xs px-2 py-1 transition-all duration-300 ${
                     currentFile.isSaved && !trackedChanges
                       ? "bg-gray-200 text-gray-700"
@@ -308,6 +320,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
                 <Editor
                   currentFile={currentFile}
                   onContentChange={handleContentChange}
+                  trackedChanges={trackedChanges}
                   onTrackedChangesUpdate={handleTrackedChangesUpdate}
                 />
               </div>
@@ -332,11 +345,13 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
                         </Button>
                       </div>
                       <div className="flex-grow overflow-y-auto">
-                        <AIChat 
+                        <AIChat
                           editorContent={editorTextContent}
                           messages={messages}
                           updateDocumentContent={handleContentChange}
                           addMessage={handleAddMessage}
+                          trackedChanges={trackedChanges}
+                          onTrackedChangesUpdate={handleTrackedChangesUpdate}
                         />
                       </div>
                     </motion.div>
@@ -358,11 +373,13 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
                         maxWidth={800}
                         className="border-l border-gray-200"
                       >
-                        <AIChat 
+                        <AIChat
                           editorContent={editorTextContent}
                           messages={messages}
                           updateDocumentContent={handleContentChange}
                           addMessage={handleAddMessage}
+                          trackedChanges={trackedChanges}
+                          onTrackedChangesUpdate={handleTrackedChangesUpdate}
                         />
                       </Resizable>
                     </motion.div>
@@ -382,12 +399,19 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancelNavigation}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmNavigation}>Save and Leave</AlertDialogAction>
-            <Button variant="ghost" onClick={() => {
-              setShowSaveDialog(false);
-              router.push(navigationPath);
-            }}>
+            <AlertDialogCancel onClick={handleCancelNavigation}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmNavigation}>
+              Save and Leave
+            </AlertDialogAction>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setShowSaveDialog(false);
+                router.push(navigationPath);
+              }}
+            >
               Leave without Saving
             </Button>
           </AlertDialogFooter>

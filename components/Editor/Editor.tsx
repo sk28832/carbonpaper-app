@@ -8,12 +8,14 @@ import { FileItem, TrackedChanges } from "@/types/fileTypes";
 interface EditorProps {
   currentFile: FileItem;
   onContentChange: (content: string) => void;
+  trackedChanges: TrackedChanges | null;
   onTrackedChangesUpdate: (trackedChanges: TrackedChanges | null) => void;
 }
 
 const Editor: React.FC<EditorProps> = ({
   currentFile,
   onContentChange,
+  trackedChanges,
   onTrackedChangesUpdate,
 }) => {
   const {
@@ -48,20 +50,17 @@ const Editor: React.FC<EditorProps> = ({
     left: number;
   } | null>(null);
   const [selectedText, setSelectedText] = useState<string>("");
-  const [trackedChanges, setTrackedChanges] = useState<TrackedChanges | null>(
-    currentFile.trackedChanges
-  );
   const [isSelecting, setIsSelecting] = useState(false);
 
   useEffect(() => {
     setHtml(currentFile.content);
-    setTrackedChanges(currentFile.trackedChanges);
-  }, [
-    currentFile.id,
-    currentFile.content,
-    currentFile.trackedChanges,
-    setHtml,
-  ]);
+  }, [currentFile.id, currentFile.content, setHtml]);
+
+  useEffect(() => {
+    if (trackedChanges) {
+      applyTrackedChangesToEditor();
+    }
+  }, [trackedChanges]);
 
   const initializeIframe = useCallback(() => {
     if (iframeRef.current) {
@@ -269,7 +268,6 @@ const Editor: React.FC<EditorProps> = ({
                 currentVersionIndex: 0,
               };
 
-              setTrackedChanges(newTrackedChanges);
               onTrackedChangesUpdate(newTrackedChanges);
 
               // Highlight the changed text
@@ -308,7 +306,6 @@ const Editor: React.FC<EditorProps> = ({
         const newContent = doc.getElementById("editor-content")!.innerHTML;
         setHtml(newContent);
         onContentChange(newContent);
-        setTrackedChanges(null);
         onTrackedChangesUpdate(null);
       }
     }
@@ -329,7 +326,6 @@ const Editor: React.FC<EditorProps> = ({
         const newContent = doc.getElementById("editor-content")!.innerHTML;
         setHtml(newContent);
         onContentChange(newContent);
-        setTrackedChanges(null);
         onTrackedChangesUpdate(null);
       }
     }
@@ -363,7 +359,6 @@ const Editor: React.FC<EditorProps> = ({
           const newContent = doc.getElementById("editor-content")!.innerHTML;
           setHtml(newContent);
           onContentChange(newContent);
-          setTrackedChanges(newTrackedChanges);
           onTrackedChangesUpdate(newTrackedChanges);
         }
       }
@@ -405,7 +400,6 @@ const Editor: React.FC<EditorProps> = ({
           const newContent = doc.getElementById("editor-content")!.innerHTML;
           setHtml(newContent);
           onContentChange(newContent);
-          setTrackedChanges(newTrackedChanges);
           onTrackedChangesUpdate(newTrackedChanges);
         } catch (error) {
           console.error("Error reprocessing changes:", error);
@@ -507,6 +501,24 @@ const Editor: React.FC<EditorProps> = ({
       }
     }
   }, []);
+
+  const applyTrackedChangesToEditor = useCallback(() => {
+    if (trackedChanges && iframeRef.current) {
+      const doc = iframeRef.current.contentDocument;
+      if (doc) {
+        const content = doc.getElementById("editor-content")!.innerHTML;
+        const updatedContent = content.replace(
+          trackedChanges.original,
+          `<span class="tracked-change">${
+            trackedChanges.versions[trackedChanges.currentVersionIndex]
+          }</span>`
+        );
+        doc.getElementById("editor-content")!.innerHTML = updatedContent;
+        setHtml(updatedContent);
+        onContentChange(updatedContent);
+      }
+    }
+  }, [trackedChanges, setHtml, onContentChange]);
 
   useEffect(() => {
     if (!isInitializedRef.current) {

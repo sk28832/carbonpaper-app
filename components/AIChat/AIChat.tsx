@@ -18,12 +18,15 @@ import Message from "./Message";
 import { debounce } from "lodash";
 import { v4 as uuidv4 } from "uuid";
 import { Message as MessageType, InputMode } from "@/types/chatTypes";
+import { TrackedChanges } from "@/types/fileTypes";
 
 interface AIChatProps {
   editorContent: string;
   messages: MessageType[];
   updateDocumentContent: (content: string) => void;
   addMessage: (message: MessageType) => void;
+  trackedChanges: TrackedChanges | null;
+  onTrackedChangesUpdate: (trackedChanges: TrackedChanges | null) => void;
 }
 
 const AIChat: React.FC<AIChatProps> = ({
@@ -31,6 +34,8 @@ const AIChat: React.FC<AIChatProps> = ({
   messages,
   updateDocumentContent,
   addMessage,
+  trackedChanges,
+  onTrackedChangesUpdate,
 }) => {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -79,6 +84,10 @@ const AIChat: React.FC<AIChatProps> = ({
       formData.append("inputMode", inputMode);
       formData.append("selectedSources", JSON.stringify(selectedSources));
 
+      if (inputMode === "edit" && trackedChanges) {
+        formData.append("trackedChanges", JSON.stringify(trackedChanges));
+      }
+
       const response = await fetch("/api/process", {
         method: "POST",
         body: formData,
@@ -103,33 +112,20 @@ const AIChat: React.FC<AIChatProps> = ({
           };
           break;
         case "edit":
-          if (data.changes) {
-            newAssistantMessage = {
-              id: uuidv4(),
-              role: "assistant",
-              content: JSON.stringify(data.changes),
-              type: "changes",
-            };
-          } else if (data.draftContent) {
-            newAssistantMessage = {
-              id: uuidv4(),
-              role: "assistant",
-              content: data.draftContent,
-              type: "draft",
-            };
-          } else {
-            throw new Error("Invalid response for edit mode");
-          }
+          newAssistantMessage = {
+            id: uuidv4(),
+            role: "assistant",
+            content: "Suggested edit",
+            type: "edit",
+            trackedChanges: data.trackedChanges,
+          };
+          onTrackedChangesUpdate(data.trackedChanges);
           break;
         default:
           throw new Error("Invalid input mode");
       }
 
       addMessage(newAssistantMessage);
-
-      if (inputMode === "edit" && data.changes) {
-        updateDocumentContent(data.updatedContent);
-      }
     } catch (error) {
       console.error("Error processing request:", error);
       const errorMessage: MessageType = {
@@ -149,8 +145,10 @@ const AIChat: React.FC<AIChatProps> = ({
     inputMode,
     editorContent,
     selectedSources,
+    trackedChanges,
     updateDocumentContent,
     addMessage,
+    onTrackedChangesUpdate,
   ]);
 
   const debouncedHandleSendMessage = useMemo(
@@ -202,12 +200,38 @@ const AIChat: React.FC<AIChatProps> = ({
                 >
                   <Message
                     message={message}
-                    handleAcceptChange={() => {}}
-                    handleRejectChange={() => {}}
-                    handleCardClick={() => {}}
-                    insertDraftContent={() => {}}
-                    handleAcceptDraft={() => {}}
-                    handleRejectDraft={() => {}}
+                    handleAcceptChange={() => {
+                      if (trackedChanges) {
+                        onTrackedChangesUpdate(null);
+                      }
+                    }}
+                    handleRejectChange={() => {
+                      if (trackedChanges) {
+                        onTrackedChangesUpdate(null);
+                      }
+                    }}
+                    handleNavigateVersion={(direction) => {
+                      if (trackedChanges) {
+                        const newIndex =
+                          direction === "prev"
+                            ? Math.max(0, trackedChanges.currentVersionIndex - 1)
+                            : Math.min(
+                                trackedChanges.versions.length - 1,
+                                trackedChanges.currentVersionIndex + 1
+                              );
+                        onTrackedChangesUpdate({
+                          ...trackedChanges,
+                          currentVersionIndex: newIndex,
+                        });
+                      }
+                    }}
+                    handleReprocessChanges={async () => {
+                      if (trackedChanges) {
+                        // Implement reprocessing logic here
+                        // This might involve sending a request to the server to generate a new version
+                        console.log("Reprocessing changes");
+                      }
+                    }}
                   />
                 </motion.div>
               ))}
@@ -267,120 +291,120 @@ const AIChat: React.FC<AIChatProps> = ({
                         aria-label="Toggle question mode"
                         className={
                           inputMode === "question"
-                            ? "bg-accent text-accent-foreground"
-                            : ""
-                        }
-                      >
-                        <Search className="h-4 w-4" />
-                      </ToggleGroupItem>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Ask a question</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <ToggleGroupItem
-                        value="edit"
-                        aria-label="Toggle edit mode"
-                        className={
-                          inputMode === "edit"
-                            ? "bg-accent text-accent-foreground"
-                            : ""
-                        }
-                      >
-                        <Edit className="h-4 w-4" />
-                      </ToggleGroupItem>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Edit document or draft new content</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </ToggleGroup>
-              </TooltipProvider>
-            </div>
-
-            <AnimatePresence>
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{
-                  duration: 0.3,
-                  ease: "easeInOut",
-                }}
-                style={{ overflow: "hidden" }}
-              >
-                <span
-                  className="inline-block text-sm font-medium cursor-pointer px-2 py-1 bg-gray-100 rounded"
-                  onClick={() => setIsSourcesOpen(true)}
-                >
-                  Selected sources: {selectedSources.join(", ") || "None"}
-                </span>
-              </motion.div>
-            </AnimatePresence>
-
-            <div className="relative">
-              <Textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={
-                  inputMode === "question"
-                    ? "Ask a question about your document or related legal topics..."
-                    : "Enter a command to edit your document or draft new content..."
-                }
-                className="w-full pr-10"
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSubmit();
-                  }
-                }}
-              />
-              <CommandPaletteTrigger setIsOpen={setIsCommandPaletteOpen} />
-            </div>
-          </div>
-
-          <div className="flex space-x-2">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={isSubmitting || isLoading}
-                    className="flex-grow"
-                  >
-                    {isSubmitting
-                      ? "Submitting..."
-                      : isLoading
-                      ? "Processing..."
-                      : "Submit"}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Submit message</p>
-                </TooltipContent>
-              </Tooltip>
+                          ? "bg-accent text-accent-foreground"
+                          : ""
+                      }
+                    >
+                      <Search className="h-4 w-4" />
+                    </ToggleGroupItem>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Ask a question</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <ToggleGroupItem
+                      value="edit"
+                      aria-label="Toggle edit mode"
+                      className={
+                        inputMode === "edit"
+                          ? "bg-accent text-accent-foreground"
+                          : ""
+                      }
+                    >
+                      <Edit className="h-4 w-4" />
+                    </ToggleGroupItem>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Edit document or draft new content</p>
+                  </TooltipContent>
+                </Tooltip>
+              </ToggleGroup>
             </TooltipProvider>
           </div>
-        </motion.div>
 
-        <CommandPalette
-          mode={inputMode}
-          onSelectExample={handleSelectExample}
-          isOpen={isCommandPaletteOpen}
-          setIsOpen={setIsCommandPaletteOpen}
-        />
+          <AnimatePresence>
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{
+                duration: 0.3,
+                ease: "easeInOut",
+              }}
+              style={{ overflow: "hidden" }}
+            >
+              <span
+                className="inline-block text-sm font-medium cursor-pointer px-2 py-1 bg-gray-100 rounded"
+                onClick={() => setIsSourcesOpen(true)}
+              >
+                Selected sources: {selectedSources.join(", ") || "None"}
+              </span>
+            </motion.div>
+          </AnimatePresence>
 
-        <Sources
-          isOpen={isSourcesOpen}
-          setIsOpen={setIsSourcesOpen}
-          onSourceSelect={handleSourceSelect}
-          currentSources={selectedSources}
-        />
+          <div className="relative">
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={
+                inputMode === "question"
+                  ? "Ask a question about your document or related legal topics..."
+                  : "Enter a command to edit your document or draft new content..."
+              }
+              className="w-full pr-10"
+              onKeyPress={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+              }}
+            />
+            <CommandPaletteTrigger setIsOpen={setIsCommandPaletteOpen} />
+          </div>
+        </div>
+
+        <div className="flex space-x-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || isLoading}
+                  className="flex-grow"
+                >
+                  {isSubmitting
+                    ? "Submitting..."
+                    : isLoading
+                    ? "Processing..."
+                    : "Submit"}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Submit message</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </motion.div>
-    </TooltipProvider>
-  );
+
+      <CommandPalette
+        mode={inputMode}
+        onSelectExample={handleSelectExample}
+        isOpen={isCommandPaletteOpen}
+        setIsOpen={setIsCommandPaletteOpen}
+      />
+
+      <Sources
+        isOpen={isSourcesOpen}
+        setIsOpen={setIsSourcesOpen}
+        onSourceSelect={handleSourceSelect}
+        currentSources={selectedSources}
+      />
+    </motion.div>
+  </TooltipProvider>
+);
 };
 
 export default AIChat;

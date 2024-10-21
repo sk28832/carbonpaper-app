@@ -1,51 +1,88 @@
-import { NextResponse } from 'next/server';
-import { generateText } from 'ai';
-import { v4 as uuidv4 } from 'uuid';
-import { Message, Change, InputMode } from '@/types/chatTypes';
-import { openai } from '@/lib/openai';
+import { NextResponse } from "next/server";
+import { generateText } from "ai";
+import { Message, InputMode } from "@/types/chatTypes";
+import { TrackedChanges } from "@/types/fileTypes";
+import { openai } from "@/lib/openai";
 
 export async function POST(request: Request) {
   const formData = await request.formData();
-  const input = formData.get('input') as string;
-  const editorContent = formData.get('editorContent') as string;
-  const inputMode = formData.get('inputMode') as InputMode;
-  const conversationHistory = JSON.parse(formData.get('conversationHistory') as string) as Message[];
-  const selectedSources = JSON.parse(formData.get('selectedSources') as string) as string[];
+  const input = formData.get("input") as string;
+  const editorContent = formData.get("editorContent") as string;
+  const inputMode = formData.get("inputMode") as InputMode;
+  const conversationHistory = JSON.parse(
+    formData.get("conversationHistory") as string
+  ) as Message[];
+  const selectedSources = JSON.parse(
+    formData.get("selectedSources") as string
+  ) as string[];
+  const trackedChanges = formData.get("trackedChanges")
+    ? (JSON.parse(formData.get("trackedChanges") as string) as TrackedChanges)
+    : null;
 
   if (!input || !inputMode) {
-    return NextResponse.json({ error: 'Invalid request format' }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request format" },
+      { status: 400 }
+    );
   }
 
-  let referenceContent = '';
-  const files = formData.getAll('files') as File[];
+  let referenceContent = "";
+  const files = formData.getAll("files") as File[];
   for (const file of files) {
     const fileContent = await file.text();
-    referenceContent += '\n' + fileContent;
+    referenceContent += "\n" + fileContent;
   }
 
   try {
     let response;
     switch (inputMode) {
-      case 'question':
-        response = await handleQuestionMode(input, editorContent, referenceContent, conversationHistory, selectedSources);
+      case "question":
+        response = await handleQuestionMode(
+          input,
+          editorContent,
+          referenceContent,
+          conversationHistory,
+          selectedSources
+        );
         break;
-      case 'edit':
-        response = await handleEditMode(input, editorContent, referenceContent);
+      case "edit":
+        response = await handleEditMode(
+          input,
+          editorContent,
+          referenceContent,
+          trackedChanges
+        );
         break;
       default:
-        return NextResponse.json({ error: 'Invalid input mode' }, { status: 400 });
+        return NextResponse.json(
+          { error: "Invalid input mode" },
+          { status: 400 }
+        );
     }
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Error in process endpoint:', error);
-    return NextResponse.json({ error: 'Internal server error', details: (error as Error).message }, { status: 500 });
+    console.error("Error in process endpoint:", error);
+    return NextResponse.json(
+      { error: "Internal server error", details: (error as Error).message },
+      { status: 500 }
+    );
   }
 }
 
-async function handleQuestionMode(input: string, editorContent: string, referenceContent: string, conversationHistory: Message[], selectedSources: string[]) {
-  const { content, citations } = await performRAG(input, selectedSources, editorContent);
-  
+async function handleQuestionMode(
+  input: string,
+  editorContent: string,
+  referenceContent: string,
+  conversationHistory: Message[],
+  selectedSources: string[]
+) {
+  const { content, citations } = await performRAG(
+    input,
+    selectedSources,
+    editorContent
+  );
+
   const assistantReply = await generateText({
     model: openai("gpt-4o"),
     messages: [
@@ -79,113 +116,116 @@ async function handleQuestionMode(input: string, editorContent: string, referenc
   });
 
   return {
-    type: 'question',
+    type: "question",
     reply: assistantReply.text,
     citations,
   };
 }
 
-async function handleEditMode(input: string, editorContent: string, referenceContent: string) {
-  if (input.toLowerCase().includes('draft') || input.toLowerCase().includes('create')) {
-    const draftedContent = await draftContent(input, editorContent, referenceContent);
-    return { type: 'draft', draftContent: draftedContent };
-  } else {
-    const analysisResult = await analyzeDocument(editorContent, input, referenceContent);
-    return { type: 'edit', ...analysisResult };
-  }
-}
-
-async function analyzeDocument(content: string, command: string, referenceContent: string): Promise<{ changes: Change[], updatedContent: string }> {
+async function handleEditMode(
+  input: string,
+  editorContent: string,
+  referenceContent: string,
+  existingTrackedChanges: TrackedChanges | null
+) {
   const response = await generateText({
     model: openai("gpt-4o"),
     messages: [
       {
         role: "system",
-        content: `You are an AI assistant specialized in analyzing and suggesting changes to legal documents. Your task is to identify all instances where the requested change should be applied and provide the necessary information for each change. Follow these guidelines:
+        content: `You are an AI assistant specialized in editing and suggesting changes to legal documents. Your task is to analyze the user's input and suggest appropriate changes or additions to the document. Follow these guidelines:
 
-        1. Analyze the given command and identify the specific change requested.
+        1. Analyze the given command and identify the specific change or addition requested.
         2. Use the reference document content to inform your suggestions, but only apply changes to the main document content.
-        3. Search the entire main document content for all instances where this change should be applied.
-        4. For each instance, provide the following information:
-           - Description of the change (brief)
-           - Original text (only the exact part that needs to change, typically 5-10 words)
-           - Suggested text (only the replacement for the original text, keeping it as brief as possible)
-        5. Ensure that the suggested changes are precise and can be easily found in the main document.
-        6. Return the results in a structured JSON format that can be easily parsed.
-        7. Do not include any markdown formatting, code block indicators, or language identifiers in your response.
-        8. Ensure your response is valid JSON that can be parsed directly.
-        9. Include the full updated content of the document after applying all changes.
+        3. If there are existing tracked changes, consider them in your analysis and suggest further modifications if necessary.
+        4. Instead of rewriting the entire document, provide specific changes to be made.
+        5. Return the results in a structured JSON format that can be easily parsed.
+        6. Include the original text to be replaced and the suggested replacement.
+        7. Do not wrap the JSON response in Markdown code blocks or any other formatting.
 
-        Example command: "Change management fee to 1.5%"
-        Example response:
-        {"changes":[{"description":"Update management fee","originalText":"2% of committed capital","suggestedText":"1.5% of committed capital"}],"updatedContent":"... the Manager will receive an annual management fee equal to 1.5% of committed capital ..."}`,
+        Example response format:
+        {
+          "trackedChanges": {
+            "original": "Text to be replaced",
+            "suggested": "Suggested replacement text"
+          }
+        }`,
       },
       {
         role: "user",
-        content: `Main Document content: ${content}\n\nReference Document content: ${referenceContent}\n\nCommand: ${command}`,
+        content: `Main Document content: ${editorContent}\n\nReference Document content: ${referenceContent}\n\nExisting Tracked Changes: ${JSON.stringify(
+          existingTrackedChanges
+        )}\n\nCommand: ${input}`,
       },
     ],
     maxTokens: 4000,
   });
 
-  const contentString = response.text;
+  let contentString = response.text;
   if (!contentString) {
     throw new Error("No content in AI response");
   }
 
-  const parsedContent = JSON.parse(contentString);
-  parsedContent.changes = parsedContent.changes.map((change: Omit<Change, 'id' | 'status'>) => ({
-    ...change,
-    id: uuidv4(),
-    status: 'pending',
-  }));
+  console.log("Raw AI response:", contentString); // For debugging
 
-  return parsedContent;
+  // Remove Markdown code block syntax if present
+  contentString = contentString.replace(/^```json\n?|\n?```$/g, '');
+
+  let parsedContent;
+  try {
+    parsedContent = JSON.parse(contentString);
+  } catch (error) {
+    console.error("Error parsing AI response:", error);
+    console.error("Processed AI response:", contentString);
+    throw new Error("Invalid response format from AI");
+  }
+
+  if (!parsedContent.trackedChanges || !parsedContent.trackedChanges.original || !parsedContent.trackedChanges.suggested) {
+    console.error("Unexpected response structure:", parsedContent);
+    throw new Error("Unexpected response structure from AI");
+  }
+
+  let newTrackedChanges: TrackedChanges;
+  if (existingTrackedChanges) {
+    newTrackedChanges = {
+      ...existingTrackedChanges,
+      versions: [
+        ...existingTrackedChanges.versions,
+        parsedContent.trackedChanges.suggested
+      ],
+      currentVersionIndex: existingTrackedChanges.versions.length
+    };
+  } else {
+    newTrackedChanges = {
+      original: parsedContent.trackedChanges.original,
+      versions: [parsedContent.trackedChanges.suggested],
+      currentVersionIndex: 0
+    };
+  }
+
+  return {
+    type: "edit",
+    trackedChanges: newTrackedChanges
+  };
 }
 
-async function draftContent(input: string, documentContent: string, referenceContent: string): Promise<string> {
-  const response = await generateText({
-    model: openai("gpt-4o"),
-    messages: [
-      {
-        role: "system",
-        content: `You are an AI assistant specialized in drafting legal documents. Your task is to generate new content based on the user's request. Follow these guidelines:
-
-        1. Generate only the body content of the clause or section, without any headers or section numbers.
-        2. Create content that fits seamlessly into the existing document, correctly using all defined terms.
-        3. Use appropriate legal language and terminology consistent with the document type and jurisdiction.
-        4. Keep the drafted content concise yet comprehensive, covering all necessary aspects of the requested clause or section.
-        5. Use proper paragraph breaks and sub-clauses where appropriate for clarity and readability.
-        6. Do not use any markdown formatting or special characters.
-        7. Adapt the style and tone to match the existing document's formality and complexity.
-        8. Include cross-references to other relevant clauses or sections if necessary, using appropriate legal phrasing.
-        9. Ensure the content is legally correct and up-to-date with current laws and regulations.
-        10. If the clause typically includes enumerations or lists, use appropriate legal numbering (e.g., (a), (b), (c) or (i), (ii), (iii)).
-        11. When drafting financial terms, use words for numbers and percentages, followed by numerals in parentheses.
-        12. Include any standard boilerplate language typically associated with the requested content type.
-        13. Do not include any disclaimers or notes about being an AI.
-
-        Remember to draft the content in a way that it can be seamlessly inserted into the existing document structure. If any specific details are missing from the user's request, draft the content using generally accepted standards for that type of provision.`,
-      },
-      {
-        role: "user",
-        content: `User Input: ${input}\n\nExisting Document Content: ${documentContent}\n\nReference Document Content: ${referenceContent}`,
-      },
-    ],
-    maxTokens: 2000,
-  });
-
-  return response.text;
-}
-
-async function performRAG(query: string, selectedSources: string[], documentContent: string): Promise<{ content: string, citations: string[] }> {
+async function performRAG(
+  query: string,
+  selectedSources: string[],
+  documentContent: string
+): Promise<{ content: string; citations: string[] }> {
   // Implement RAG logic here
   // This would typically involve using a vector database and retrieval system
   // For now, we'll return a placeholder response
-  const sourceContent = selectedSources.map(source => `Content from ${source}`).join('\n');
+  const sourceContent = selectedSources
+    .map((source) => `Content from ${source}`)
+    .join("\n");
   return {
     content: `Additional context for query: "${query}"\n\nSelected sources:\n${sourceContent}\n\nDocument content:\n${documentContent}`,
-    citations: selectedSources.map(source => `https://example.com/${source.toLowerCase().replace(/\s+/g, '-')}`),
+    citations: selectedSources.map(
+      (source) =>
+        `https://example.com/${source.toLowerCase().replace(/\s+/g, "-")}`
+    ),
   };
 }
 

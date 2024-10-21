@@ -3,16 +3,15 @@ import ReactMarkdown from "react-markdown";
 import { PenTool } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Message as MessageType, Change } from "@/types/chatTypes";
+import { Message as MessageType } from "@/types/chatTypes";
+import { TrackedChanges } from "@/types/fileTypes";
 
 interface MessageProps {
   message: MessageType;
-  handleAcceptChange: (changeId: string) => void;
-  handleRejectChange: (changeId: string) => void;
-  handleCardClick: (changeId: string) => void;
-  insertDraftContent: (content: string, messageId: string) => void;
-  handleAcceptDraft: (messageId: string) => void;
-  handleRejectDraft: (messageId: string) => void;
+  handleAcceptChange: () => void;
+  handleRejectChange: () => void;
+  handleNavigateVersion: (direction: "prev" | "next") => void;
+  handleReprocessChanges: () => void;
 }
 
 const Message: React.FC<MessageProps> = React.memo(
@@ -20,10 +19,8 @@ const Message: React.FC<MessageProps> = React.memo(
     message,
     handleAcceptChange,
     handleRejectChange,
-    handleCardClick,
-    insertDraftContent,
-    handleAcceptDraft,
-    handleRejectDraft,
+    handleNavigateVersion,
+    handleReprocessChanges,
   }) => {
     const renderMarkdownContent = (content: string) => (
       <ReactMarkdown className="prose prose-sm max-w-full break-words">
@@ -53,6 +50,74 @@ const Message: React.FC<MessageProps> = React.memo(
         </div>
       );
 
+    const renderTrackedChanges = (trackedChanges: TrackedChanges) => (
+      <Card className="mb-4 border border-gray-200 shadow-sm">
+        <CardHeader className="border-b border-gray-200">
+          <CardTitle className="flex items-center space-x-2 text-sm">
+            <PenTool size={16} />
+            <span>Tracked Changes</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4">
+          <div>
+            <p className="text-xs font-semibold">Original text:</p>
+            <div className="bg-gray-100 p-2 mb-2 text-sm break-words">
+              {trackedChanges.original}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-semibold">Suggested text by AI:</p>
+            <div className="bg-gray-100 p-2 mb-2 text-sm break-words">
+              {trackedChanges.versions[trackedChanges.currentVersionIndex]}
+            </div>
+          </div>
+          <div className="flex justify-between items-center mt-4">
+            <div className="space-x-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleAcceptChange}
+              >
+                Accept Change
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRejectChange}
+              >
+                Reject Change
+              </Button>
+            </div>
+            <div className="space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleNavigateVersion("prev")}
+                disabled={trackedChanges.currentVersionIndex === 0}
+              >
+                Previous Version
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleNavigateVersion("next")}
+                disabled={trackedChanges.currentVersionIndex === trackedChanges.versions.length - 1}
+              >
+                Next Version
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleReprocessChanges}
+              >
+                Reprocess
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+
     if (message.type === "text") {
       return (
         <div
@@ -80,146 +145,10 @@ const Message: React.FC<MessageProps> = React.memo(
           </Card>
         </div>
       );
-    } else if (message.type === "changes") {
-      let changes: Change[] = [];
-      try {
-        changes = JSON.parse(message.content);
-      } catch (error) {
-        console.error("Error parsing message content:", error);
-        return <div>Error displaying changes. Please try again.</div>;
-      }
-
-      return (
-        <>
-          {changes.map((change: Change) => (
-            <Card
-              key={change.id}
-              className={`mb-4 ${
-                change.status === "pending"
-                  ? "cursor-pointer hover:shadow-md"
-                  : ""
-              } transition-shadow duration-200`}
-              onClick={() =>
-                change.status === "pending" && handleCardClick(change.id)
-              }
-            >
-              <CardHeader>
-                <CardTitle className="text-sm break-words">
-                  {change.description}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {change.originalText && (
-                  <div>
-                    <p className="text-xs font-semibold">Original text:</p>
-                    <div className="bg-gray-100 p-2 mb-2 text-sm break-words">
-                      {change.originalText}
-                    </div>
-                  </div>
-                )}
-                <div>
-                  <p className="text-xs font-semibold">Suggested text by AI:</p>
-                  <div className="bg-gray-100 p-2 mb-2 text-sm break-words">
-                    {change.suggestedText}
-                  </div>
-                </div>
-                {change.status === "pending" ? (
-                  <div className="flex justify-start space-x-2">
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAcceptChange(change.id);
-                      }}
-                    >
-                      Accept Change
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRejectChange(change.id);
-                      }}
-                    >
-                      Reject Change
-                    </Button>
-                  </div>
-                ) : (
-                  <div
-                    className={`text-center p-2 font-bold ${
-                      change.status === "accepted"
-                        ? "text-green-700"
-                        : "text-red-700"
-                    }`}
-                  >
-                    {change.status === "accepted" ? "Accepted" : "Rejected"}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </>
-      );
-    } else if (message.type === "draft") {
-      return (
-        <Card className="mb-4 border border-gray-200 shadow-sm">
-          <CardHeader className="border-b border-gray-200">
-            <CardTitle className="flex items-center space-x-2 text-sm">
-              <PenTool size={16} />
-              <span>Drafted Content</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4">
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 max-h-60 overflow-y-auto">
-              {renderMarkdownContent(message.content)}
-            </div>
-            <div className="mt-4 flex justify-start space-x-2">
-              {message.status === "inserted" ? (
-                <>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => handleAcceptDraft(message.id)}
-                  >
-                    Accept Draft
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleRejectDraft(message.id)}
-                  >
-                    Reject Draft
-                  </Button>
-                </>
-              ) : message.status === "accepted" ||
-                message.status === "rejected" ? (
-                <div
-                  className={`text-sm font-medium ${
-                    message.status === "accepted"
-                      ? "text-green-700"
-                      : "text-red-700"
-                  }`}
-                >
-                  {message.status === "accepted" ? "Accepted" : "Rejected"}
-                </div>
-              ) : (
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() =>
-                    insertDraftContent(message.content, message.id)
-                  }
-                >
-                  Insert into Document
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      );
+    } else if (message.type === "edit" && message.trackedChanges) {
+      return renderTrackedChanges(message.trackedChanges);
     }
+    
     return null;
   }
 );

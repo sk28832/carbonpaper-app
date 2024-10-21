@@ -1,20 +1,15 @@
 // File: types/chatTypes.ts
 
+import { TrackedChanges } from "@/types/fileTypes";
+
 export interface Message {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
-  type: "text" | "changes" | "draft";
+  type: "text" | "edit";
+  trackedChanges?: TrackedChanges;
   status?: "pending" | "accepted" | "rejected" | "inserted";
   citations?: string[];
-}
-
-export interface Change {
-  id: string;
-  description: string;
-  originalText: string;
-  suggestedText: string;
-  status: "pending" | "accepted" | "rejected";
 }
 
 export interface Placeholder {
