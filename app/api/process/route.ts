@@ -31,11 +31,11 @@ export async function POST(request: Request) {
 
   try {
     if (selectedText) {
-      // This is either a quick action or custom action
+      // Handle hover bar actions (quick action or custom action)
       const response = await handleQuickAction(input, selectedText, inputMode === "edit");
       return NextResponse.json(response);
     } else {
-      // This is a regular question or edit
+      // Handle AI chat actions
       switch (inputMode) {
         case "question":
           const response = await handleQuestionMode(
@@ -74,23 +74,44 @@ async function handleQuestionMode(
   conversationHistory: Message[],
   selectedSources: string[]
 ) {
+  // Build context from document content and selected sources
+  const context = `
+Document Content:
+${editorContent}
+
+${selectedSources.length > 0 ? `Additional Context from Selected Sources:
+${selectedSources.join('\n')}` : ''}
+`;
+
   const assistantReply = await generateText({
-    model: openai("gpt-4o"),
+    model: openai("gpt-4o-mini"),
     messages: [
       {
         role: "system",
-        content: `You are an AI assistant specialized in law practices, regulations, and related topics. Your primary users are attorneys. Provide concise, accurate answers to their questions.`,
+        content: `You are an AI assistant specialized in law practices, regulations, and related topics. Your primary users are attorneys. Provide concise, accurate answers to their questions. You have access to the full document content and any additional selected sources for context. Reference specific parts of the document when relevant to your answers.`,
       },
-      ...conversationHistory,
-      { role: "user", content: input },
+      {
+        role: "user",
+        content: `Context:
+${context}
+
+Question: ${input}`,
+      },
+      ...conversationHistory.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }))
     ],
     maxTokens: 2000,
   });
 
+  // Extract relevant citations from the document based on the response
+  const citations = extractCitations(assistantReply.text, editorContent);
+
   return {
     type: "question",
     reply: assistantReply.text,
-    citations: [],
+    citations
   };
 }
 
@@ -100,7 +121,7 @@ async function handleEditMode(
   existingTrackedChanges: TrackedChanges | null
 ) {
   const response = await generateText({
-    model: openai("gpt-4o"),
+    model: openai("gpt-4o-mini"),
     messages: [
       {
         role: "system",
@@ -114,7 +135,6 @@ async function handleEditMode(
     maxTokens: 4000,
   });
 
-  // Wrap the edit in a tracked changes object
   const trackedChanges: TrackedChanges = {
     original: editorContent,
     versions: [response.text],
@@ -142,7 +162,7 @@ async function handleQuickAction(
   const prompt = promptMap[action] || action;
 
   const response = await generateText({
-    model: openai("gpt-4o"),
+    model: openai("gpt-4o-mini"),
     messages: [
       {
         role: "system",
@@ -172,6 +192,20 @@ async function handleQuickAction(
       citations: [],
     };
   }
+}
+
+function extractCitations(reply: string, documentContent: string): string[] {
+  // Simple citation extraction - can be enhanced based on needs
+  const sentences = documentContent.split(/[.!?]+/);
+  const citations = [];
+  
+  for (const sentence of sentences) {
+    if (reply.toLowerCase().includes(sentence.toLowerCase().trim())) {
+      citations.push(sentence.trim());
+    }
+  }
+  
+  return citations;
 }
 
 export const config = {
