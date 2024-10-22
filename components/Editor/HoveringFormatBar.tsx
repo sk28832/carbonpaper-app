@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Wand2, Check, X, RotateCcw, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Check, X, RotateCcw, ArrowLeft, ArrowRight } from 'lucide-react';
 import { TrackedChanges } from '@/types/fileTypes';
 
 interface HoveringFormatBarProps {
@@ -45,7 +44,7 @@ const HoveringFormatBar: React.FC<HoveringFormatBarProps> = ({
 
   return (
     <div
-      className="absolute bg-white border border-gray-200 rounded-md shadow-lg p-2 z-50 flex items-center space-x-2"
+      className="absolute bg-white border border-gray-200 rounded-md shadow-lg p-3 z-50 flex items-center space-x-3"
       style={{
         top: `${position.top}px`,
         left: `${position.left}px`,
@@ -72,19 +71,22 @@ const HoveringFormatBar: React.FC<HoveringFormatBarProps> = ({
         </>
       ) : (
         <>
-          <Wand2 size={16} className="text-gray-500" />
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center bg-gray-100 rounded-lg p-1">
+            <div className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${!isEditMode ? 'bg-white shadow-sm text-black' : 'text-gray-500'}`}>
+              Ask
+            </div>
             <Switch
-              id="edit-mode"
               checked={isEditMode}
               onCheckedChange={setIsEditMode}
+              className="mx-2"
             />
-            <Label htmlFor="edit-mode" className="text-sm">
-              {isEditMode ? 'Edit' : 'Ask'}
-            </Label>
+            <div className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${isEditMode ? 'bg-white shadow-sm text-black' : 'text-gray-500'}`}>
+              Edit
+            </div>
           </div>
+          
           {isEditMode && (
-            <>
+            <div className="flex items-center space-x-2">
               <Button variant="ghost" size="sm" onClick={() => handleQuickAction('improve')}>
                 Improve
               </Button>
@@ -97,8 +99,9 @@ const HoveringFormatBar: React.FC<HoveringFormatBarProps> = ({
               <Button variant="ghost" size="sm" onClick={() => handleQuickAction('longer')}>
                 Longer
               </Button>
-            </>
+            </div>
           )}
+          
           <Input
             type="text"
             placeholder={isEditMode ? "Custom edit..." : "Ask a question..."}

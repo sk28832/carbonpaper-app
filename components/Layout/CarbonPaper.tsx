@@ -43,9 +43,13 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [navigationPath, setNavigationPath] = useState("");
-  const [trackedChanges, setTrackedChanges] = useState<TrackedChanges | null>(null);
+  const [trackedChanges, setTrackedChanges] = useState<TrackedChanges | null>(
+    null
+  );
   const isSavingRef = useRef(false);
   const lastSavedContentRef = useRef("");
+  const lastContentRef = useRef("");
+  const isInitialLoad = useRef(true);
 
   useEffect(() => {
     const fetchFile = async () => {
@@ -60,6 +64,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           setMessages(file.messages || []);
           setTrackedChanges(file.trackedChanges || null);
           lastSavedContentRef.current = file.content;
+          lastContentRef.current = file.content;
         } else {
           console.error("Failed to fetch file");
           router.push("/");
@@ -69,6 +74,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
         router.push("/");
       } finally {
         setIsLoading(false);
+        isInitialLoad.current = false;
       }
     };
 
@@ -82,11 +88,14 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
 
   const handleContentChange = useCallback(
     (newContent: string) => {
-      if (currentFile) {
+      if (!currentFile || isInitialLoad.current) return;
+
+      if (newContent !== lastContentRef.current) {
+        lastContentRef.current = newContent;
         setCurrentFile((prevFile) => ({
           ...prevFile!,
           content: newContent,
-          isSaved: false,
+          isSaved: lastSavedContentRef.current === newContent,
         }));
         setEditorContent(newContent);
         setEditorTextContent(extractTextFromHtml(newContent));
@@ -133,106 +142,116 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
     [currentFile]
   );
 
-  const handleQuickAction = useCallback(async (selectedText: string, action: string): Promise<void> => {
-    if (!currentFile) return;
+  const handleQuickAction = useCallback(
+    async (selectedText: string, action: string): Promise<void> => {
+      if (!currentFile) return;
 
-    setIsAIChatOpen(true);
-    
-    try {
-      const formData = new FormData();
-      formData.append("input", action);
-      formData.append("editorContent", editorContent);
-      formData.append("selectedText", selectedText);
-      formData.append("inputMode", "edit");
-      formData.append("selectedSources", JSON.stringify([]));
+      setIsAIChatOpen(true);
 
-      const loadingMessage: Message = {
-        id: uuidv4(),
-        role: "user",
-        content: `Applying quick action: ${action} to "${selectedText}"`,
-        type: "text",
-      };
-      await handleAddMessage(loadingMessage);
+      try {
+        const formData = new FormData();
+        formData.append("input", action);
+        formData.append("editorContent", editorContent);
+        formData.append("selectedText", selectedText);
+        formData.append("inputMode", "edit");
+        formData.append("selectedSources", JSON.stringify([]));
 
-      const response = await fetch("/api/process", {
-        method: "POST",
-        body: formData,
-      });
+        const loadingMessage: Message = {
+          id: uuidv4(),
+          role: "user",
+          content: `Applying quick action: ${action} to "${selectedText}"`,
+          type: "text",
+        };
+        await handleAddMessage(loadingMessage);
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const response = await fetch("/api/process", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        const assistantMessage: Message = {
+          id: uuidv4(),
+          role: "assistant",
+          content: "Changes applied",
+          type: "edit",
+          trackedChanges: data.trackedChanges,
+        };
+        await handleAddMessage(assistantMessage);
+
+        if (data.trackedChanges) {
+          await handleTrackedChangesUpdate(data.trackedChanges);
+        }
+      } catch (error) {
+        console.error("Error processing quick action:", error);
       }
+    },
+    [currentFile, editorContent, handleTrackedChangesUpdate, handleAddMessage]
+  );
 
-      const data = await response.json();
+  const handleCustomAction = useCallback(
+    async (
+      selectedText: string,
+      action: string,
+      isEdit: boolean
+    ): Promise<void> => {
+      if (!currentFile) return;
 
-      const assistantMessage: Message = {
-        id: uuidv4(),
-        role: "assistant",
-        content: "Changes applied",
-        type: "edit",
-        trackedChanges: data.trackedChanges,
-      };
-      await handleAddMessage(assistantMessage);
+      setIsAIChatOpen(true);
 
-      if (data.trackedChanges) {
-        await handleTrackedChangesUpdate(data.trackedChanges);
+      try {
+        const formData = new FormData();
+        formData.append("input", action);
+        formData.append("editorContent", editorContent);
+        formData.append("selectedText", selectedText);
+        formData.append("inputMode", isEdit ? "edit" : "question");
+        formData.append("selectedSources", JSON.stringify([]));
+
+        const userMessage: Message = {
+          id: uuidv4(),
+          role: "user",
+          content: isEdit
+            ? `Change this text: "${selectedText}" using this instruction: ${action}`
+            : action,
+          type: "text",
+        };
+        await handleAddMessage(userMessage);
+
+        const response = await fetch("/api/process", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        const assistantMessage: Message = {
+          id: uuidv4(),
+          role: "assistant",
+          content: isEdit ? "Suggested edit" : data.reply,
+          type: isEdit ? "edit" : "text",
+          ...(isEdit && { trackedChanges: data.trackedChanges }),
+          ...(!isEdit && data.citations && { citations: data.citations }),
+        };
+        await handleAddMessage(assistantMessage);
+
+        if (isEdit && data.trackedChanges) {
+          await handleTrackedChangesUpdate(data.trackedChanges);
+        }
+      } catch (error) {
+        console.error("Error processing custom action:", error);
       }
-    } catch (error) {
-      console.error("Error processing quick action:", error);
-    }
-  }, [currentFile, editorContent, handleTrackedChangesUpdate, handleAddMessage]);
-
-  const handleCustomAction = useCallback(async (selectedText: string, action: string, isEdit: boolean): Promise<void> => {
-    if (!currentFile) return;
-    
-    setIsAIChatOpen(true);
-
-    try {
-      const formData = new FormData();
-      formData.append("input", action);
-      formData.append("editorContent", editorContent);
-      formData.append("selectedText", selectedText);
-      formData.append("inputMode", isEdit ? "edit" : "question");
-      formData.append("selectedSources", JSON.stringify([]));
-
-      const userMessage: Message = {
-        id: uuidv4(),
-        role: "user",
-        content: isEdit 
-          ? `Change this text: "${selectedText}" using this instruction: ${action}`
-          : action,
-        type: "text",
-      };
-      await handleAddMessage(userMessage);
-
-      const response = await fetch("/api/process", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      const assistantMessage: Message = {
-        id: uuidv4(),
-        role: "assistant",
-        content: isEdit ? "Suggested edit" : data.reply,
-        type: isEdit ? "edit" : "text",
-        ...(isEdit && { trackedChanges: data.trackedChanges }),
-        ...((!isEdit && data.citations) && { citations: data.citations }),
-      };
-      await handleAddMessage(assistantMessage);
-
-      if (isEdit && data.trackedChanges) {
-        await handleTrackedChangesUpdate(data.trackedChanges);
-      }
-    } catch (error) {
-      console.error("Error processing custom action:", error);
-    }
-  }, [currentFile, editorContent, handleAddMessage, handleTrackedChangesUpdate]);
+    },
+    [currentFile, editorContent, handleAddMessage, handleTrackedChangesUpdate]
+  );
 
   const handleSave = useCallback(async () => {
     if (!currentFile || isSavingRef.current) return;
@@ -260,8 +279,9 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
       }
 
       const savedFile = await response.json();
-      setCurrentFile(savedFile);
       lastSavedContentRef.current = editorContent;
+      lastContentRef.current = editorContent;
+      setCurrentFile(savedFile);
     } catch (error) {
       console.error("Error saving file:", error);
       throw error;
@@ -301,11 +321,10 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
 
   const handleNavigation = useCallback(
     (path: string) => {
-      const hasUnsavedChanges = 
-        currentFile && 
-        (!currentFile.isSaved || 
-         trackedChanges || 
-         editorContent !== lastSavedContentRef.current);
+      const hasUnsavedChanges =
+        currentFile &&
+        (lastSavedContentRef.current !== lastContentRef.current ||
+          !!trackedChanges);
 
       if (hasUnsavedChanges) {
         setShowSaveDialog(true);
@@ -314,7 +333,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
         router.push(path);
       }
     },
-    [currentFile, trackedChanges, editorContent, router]
+    [currentFile, trackedChanges, router]
   );
 
   const handleConfirmNavigation = useCallback(async () => {
@@ -342,11 +361,10 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   // Auto-save functionality
   useEffect(() => {
     const autoSaveInterval = setInterval(async () => {
-      const hasUnsavedChanges = 
-        currentFile && 
-        (!currentFile.isSaved || 
-         trackedChanges || 
-         editorContent !== lastSavedContentRef.current);
+      const hasUnsavedChanges =
+        currentFile &&
+        (lastSavedContentRef.current !== lastContentRef.current ||
+          !!trackedChanges);
 
       if (hasUnsavedChanges && !isSavingRef.current) {
         try {
@@ -358,7 +376,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
     }, 30000); // Auto-save every 30 seconds
 
     return () => clearInterval(autoSaveInterval);
-  }, [currentFile, trackedChanges, editorContent, handleSave]);
+  }, [currentFile, trackedChanges, handleSave]);
 
   if (isLoading) {
     return (
@@ -383,10 +401,8 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
     return <div>File not found</div>;
   }
 
-  const hasUnsavedChanges = 
-    !currentFile.isSaved || 
-    trackedChanges || 
-    editorContent !== lastSavedContentRef.current;
+  const hasUnsavedChanges =
+    lastSavedContentRef.current !== lastContentRef.current || !!trackedChanges;
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
