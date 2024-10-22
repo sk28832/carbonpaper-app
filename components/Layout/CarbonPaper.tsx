@@ -1,7 +1,7 @@
 // File: components/Layout/CarbonPaper.tsx
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Resizable } from "re-resizable";
@@ -43,9 +43,9 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [navigationPath, setNavigationPath] = useState("");
-  const [trackedChanges, setTrackedChanges] = useState<TrackedChanges | null>(
-    null
-  );
+  const [trackedChanges, setTrackedChanges] = useState<TrackedChanges | null>(null);
+  const isSavingRef = useRef(false);
+  const lastSavedContentRef = useRef("");
 
   useEffect(() => {
     const fetchFile = async () => {
@@ -59,6 +59,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           setEditorTextContent(extractTextFromHtml(file.content));
           setMessages(file.messages || []);
           setTrackedChanges(file.trackedChanges || null);
+          lastSavedContentRef.current = file.content;
         } else {
           console.error("Failed to fetch file");
           router.push("/");
@@ -73,21 +74,6 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
 
     fetchFile();
   }, [fileId, router, setIsLoading]);
-
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (currentFile && (!currentFile.isSaved || trackedChanges)) {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [currentFile, trackedChanges]);
 
   const extractTextFromHtml = (html: string): string => {
     const doc = new DOMParser().parseFromString(html, "text/html");
@@ -110,15 +96,19 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   );
 
   const handleTrackedChangesUpdate = useCallback(
-    (newTrackedChanges: TrackedChanges | null) => {
+    async (newTrackedChanges: TrackedChanges | null) => {
       setTrackedChanges(newTrackedChanges);
       if (currentFile) {
-        setCurrentFile((prevFile) => ({
-          ...prevFile!,
-          trackedChanges: newTrackedChanges,
-          isSaved: false,
-        }));
-        updateTrackedChanges(currentFile.id, newTrackedChanges);
+        try {
+          await updateTrackedChanges(currentFile.id, newTrackedChanges);
+          setCurrentFile((prevFile) => ({
+            ...prevFile!,
+            trackedChanges: newTrackedChanges,
+            isSaved: false,
+          }));
+        } catch (error) {
+          console.error("Error updating tracked changes:", error);
+        }
       }
     },
     [currentFile]
@@ -143,141 +133,167 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
     [currentFile]
   );
 
+  const handleQuickAction = useCallback(async (selectedText: string, action: string): Promise<void> => {
+    if (!currentFile) return;
 
-const handleQuickAction = useCallback(async (selectedText: string, action: string): Promise<void> => {
-  if (!currentFile) return;
+    setIsAIChatOpen(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append("input", action);
+      formData.append("editorContent", editorContent);
+      formData.append("selectedText", selectedText);
+      formData.append("inputMode", "edit");
+      formData.append("selectedSources", JSON.stringify([]));
 
-  try {
-    const formData = new FormData();
-    formData.append("input", action);
-    formData.append("editorContent", editorContent);
-    formData.append("selectedText", selectedText);
-    formData.append("inputMode", "edit");
-    formData.append("selectedSources", JSON.stringify([]));
+      const loadingMessage: Message = {
+        id: uuidv4(),
+        role: "user",
+        content: `Applying quick action: ${action} to "${selectedText}"`,
+        type: "text",
+      };
+      await handleAddMessage(loadingMessage);
 
-    const response = await fetch("/api/process", {
-      method: "POST",
-      body: formData,
-    });
+      const response = await fetch("/api/process", {
+        method: "POST",
+        body: formData,
+      });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      const assistantMessage: Message = {
+        id: uuidv4(),
+        role: "assistant",
+        content: "Changes applied",
+        type: "edit",
+        trackedChanges: data.trackedChanges,
+      };
+      await handleAddMessage(assistantMessage);
+
+      if (data.trackedChanges) {
+        await handleTrackedChangesUpdate(data.trackedChanges);
+      }
+    } catch (error) {
+      console.error("Error processing quick action:", error);
     }
+  }, [currentFile, editorContent, handleTrackedChangesUpdate, handleAddMessage]);
 
-    const data = await response.json();
+  const handleCustomAction = useCallback(async (selectedText: string, action: string, isEdit: boolean): Promise<void> => {
+    if (!currentFile) return;
+    
+    setIsAIChatOpen(true);
 
-    if (data.trackedChanges) {
-      handleTrackedChangesUpdate(data.trackedChanges);
+    try {
+      const formData = new FormData();
+      formData.append("input", action);
+      formData.append("editorContent", editorContent);
+      formData.append("selectedText", selectedText);
+      formData.append("inputMode", isEdit ? "edit" : "question");
+      formData.append("selectedSources", JSON.stringify([]));
+
+      const userMessage: Message = {
+        id: uuidv4(),
+        role: "user",
+        content: isEdit 
+          ? `Change this text: "${selectedText}" using this instruction: ${action}`
+          : action,
+        type: "text",
+      };
+      await handleAddMessage(userMessage);
+
+      const response = await fetch("/api/process", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      const assistantMessage: Message = {
+        id: uuidv4(),
+        role: "assistant",
+        content: isEdit ? "Suggested edit" : data.reply,
+        type: isEdit ? "edit" : "text",
+        ...(isEdit && { trackedChanges: data.trackedChanges }),
+        ...((!isEdit && data.citations) && { citations: data.citations }),
+      };
+      await handleAddMessage(assistantMessage);
+
+      if (isEdit && data.trackedChanges) {
+        await handleTrackedChangesUpdate(data.trackedChanges);
+      }
+    } catch (error) {
+      console.error("Error processing custom action:", error);
     }
-  } catch (error) {
-    console.error("Error processing quick action:", error);
-  }
-}, [currentFile, editorContent, handleTrackedChangesUpdate]);
-
-const handleCustomAction = useCallback(async (selectedText: string, action: string, isEdit: boolean): Promise<void> => {
-  if (!currentFile) return;
-  
-  setIsAIChatOpen(true); // Open AI chat when custom action is triggered
-
-  try {
-    const formData = new FormData();
-    formData.append("input", action);
-    formData.append("editorContent", editorContent);
-    formData.append("selectedText", selectedText);
-    formData.append("inputMode", isEdit ? "edit" : "question");
-    formData.append("selectedSources", JSON.stringify([]));
-
-    const response = await fetch("/api/process", {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    const newMessage: Message = {
-      id: uuidv4(),
-      role: "user",
-      content: isEdit ? `Change this text: "${selectedText}" using this instruction: ${action}` : action,
-      type: "text",
-    };
-
-    await handleAddMessage(newMessage);
-
-    const assistantMessage: Message = {
-      id: uuidv4(),
-      role: "assistant",
-      content: isEdit ? "Suggested edit" : data.reply,
-      type: isEdit ? "edit" : "text",
-      ...(isEdit && { trackedChanges: data.trackedChanges }),
-      ...((!isEdit && data.citations) && { citations: data.citations }),
-    };
-
-    await handleAddMessage(assistantMessage);
-
-    if (isEdit && data.trackedChanges) {
-      handleTrackedChangesUpdate(data.trackedChanges);
-    }
-  } catch (error) {
-    console.error("Error processing custom action:", error);
-  }
-}, [currentFile, editorContent, handleAddMessage, handleTrackedChangesUpdate, setIsAIChatOpen]);
-
+  }, [currentFile, editorContent, handleAddMessage, handleTrackedChangesUpdate]);
 
   const handleSave = useCallback(async () => {
-    if (currentFile) {
-      try {
-        const updatedFile = {
-          ...currentFile,
-          content: editorContent,
-          messages: messages,
-          trackedChanges: trackedChanges,
-          isSaved: true,
-        };
-        const response = await fetch(`/api/files/${currentFile.id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(updatedFile),
-        });
-        if (response.ok) {
-          setCurrentFile(updatedFile);
-        } else {
-          console.error("Failed to save file");
-        }
-      } catch (error) {
-        console.error("Error saving file:", error);
+    if (!currentFile || isSavingRef.current) return;
+
+    isSavingRef.current = true;
+    try {
+      const updatedFile = {
+        ...currentFile,
+        content: editorContent,
+        messages,
+        trackedChanges,
+        isSaved: true,
+      };
+
+      const response = await fetch(`/api/files/${currentFile.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedFile),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save file");
       }
+
+      const savedFile = await response.json();
+      setCurrentFile(savedFile);
+      lastSavedContentRef.current = editorContent;
+    } catch (error) {
+      console.error("Error saving file:", error);
+      throw error;
+    } finally {
+      isSavingRef.current = false;
     }
   }, [currentFile, editorContent, messages, trackedChanges]);
 
   const handleNameChange = useCallback(
     async (newName: string) => {
-      if (currentFile) {
-        try {
-          const response = await fetch(`/api/files/${currentFile.id}`, {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ name: newName }),
-          });
-          if (response.ok) {
-            setCurrentFile((prevFile) => ({
-              ...prevFile!,
-              name: newName,
-              isSaved: false,
-            }));
-          } else {
-            console.error("Failed to update file name");
-          }
-        } catch (error) {
-          console.error("Error updating file name:", error);
+      if (!currentFile) return;
+
+      try {
+        const response = await fetch(`/api/files/${currentFile.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name: newName }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to update file name");
         }
+
+        setCurrentFile((prevFile) => ({
+          ...prevFile!,
+          name: newName,
+          isSaved: false,
+        }));
+      } catch (error) {
+        console.error("Error updating file name:", error);
       }
     },
     [currentFile]
@@ -285,38 +301,64 @@ const handleCustomAction = useCallback(async (selectedText: string, action: stri
 
   const handleNavigation = useCallback(
     (path: string) => {
-      if (currentFile && (!currentFile.isSaved || trackedChanges)) {
+      const hasUnsavedChanges = 
+        currentFile && 
+        (!currentFile.isSaved || 
+         trackedChanges || 
+         editorContent !== lastSavedContentRef.current);
+
+      if (hasUnsavedChanges) {
         setShowSaveDialog(true);
         setNavigationPath(path);
       } else {
         router.push(path);
       }
     },
-    [currentFile, trackedChanges, router]
+    [currentFile, trackedChanges, editorContent, router]
   );
 
   const handleConfirmNavigation = useCallback(async () => {
     setShowSaveDialog(false);
-    if (currentFile && (!currentFile.isSaved || trackedChanges)) {
+    try {
       await handleSave();
+      router.push(navigationPath);
+    } catch (error) {
+      console.error("Error saving before navigation:", error);
+      // Allow user to choose whether to continue without saving
+      const shouldContinue = window.confirm(
+        "Failed to save changes. Would you like to continue without saving?"
+      );
+      if (shouldContinue) {
+        router.push(navigationPath);
+      }
     }
-    router.push(navigationPath);
-  }, [navigationPath, router, currentFile, trackedChanges, handleSave]);
+  }, [navigationPath, router, handleSave]);
 
   const handleCancelNavigation = useCallback(() => {
     setShowSaveDialog(false);
     setNavigationPath("");
   }, []);
 
+  // Auto-save functionality
   useEffect(() => {
-    const saveInterval = setInterval(() => {
-      if (currentFile && (!currentFile.isSaved || trackedChanges)) {
-        handleSave();
-      }
-    }, 30000);
+    const autoSaveInterval = setInterval(async () => {
+      const hasUnsavedChanges = 
+        currentFile && 
+        (!currentFile.isSaved || 
+         trackedChanges || 
+         editorContent !== lastSavedContentRef.current);
 
-    return () => clearInterval(saveInterval);
-  }, [currentFile, trackedChanges, handleSave]);
+      if (hasUnsavedChanges && !isSavingRef.current) {
+        try {
+          await handleSave();
+        } catch (error) {
+          console.error("Auto-save failed:", error);
+        }
+      }
+    }, 30000); // Auto-save every 30 seconds
+
+    return () => clearInterval(autoSaveInterval);
+  }, [currentFile, trackedChanges, editorContent, handleSave]);
 
   if (isLoading) {
     return (
@@ -341,6 +383,11 @@ const handleCustomAction = useCallback(async (selectedText: string, action: stri
     return <div>File not found</div>;
   }
 
+  const hasUnsavedChanges = 
+    !currentFile.isSaved || 
+    trackedChanges || 
+    editorContent !== lastSavedContentRef.current;
+
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       <div className="flex items-center justify-between bg-white border-b border-gray-200 p-3 shadow-sm">
@@ -363,22 +410,20 @@ const handleCustomAction = useCallback(async (selectedText: string, action: stri
             variant="ghost"
             size="sm"
             onClick={handleSave}
-            disabled={currentFile.isSaved && !trackedChanges}
+            disabled={!hasUnsavedChanges || isSavingRef.current}
             className="text-gray-600 hover:text-gray-900"
           >
             <Save className="h-5 w-5" />
           </Button>
           <Badge
-            variant={
-              currentFile.isSaved && !trackedChanges ? "secondary" : "outline"
-            }
+            variant={hasUnsavedChanges ? "outline" : "secondary"}
             className={`text-xs px-2 py-1 transition-all duration-300 ${
-              currentFile.isSaved && !trackedChanges
-                ? "bg-gray-200 text-gray-700"
-                : "bg-white text-gray-500 border-gray-300"
+              hasUnsavedChanges
+                ? "bg-white text-gray-500 border-gray-300"
+                : "bg-gray-200 text-gray-700"
             }`}
           >
-            {currentFile.isSaved && !trackedChanges ? "Saved" : "Unsaved"}
+            {hasUnsavedChanges ? "Unsaved" : "Saved"}
           </Badge>
         </div>
         <Button

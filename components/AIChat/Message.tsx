@@ -61,7 +61,7 @@ const Message: React.FC<MessageProps> = React.memo(({ message }) => {
           </div>
         </div>
         <p className="text-xs text-gray-500 mt-2">
-          Use the HoveringFormatBar in the editor to manage this suggestion.
+          Use the hovering bar in the editor to manage this suggestion.
         </p>
       </CardContent>
     </Card>

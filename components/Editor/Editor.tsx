@@ -5,6 +5,14 @@ import HoveringFormatBar from "./HoveringFormatBar";
 import { useEditorState } from "./useEditorState";
 import { FileItem, TrackedChanges } from "@/types/fileTypes";
 
+interface SelectionInfo {
+  elementId: string;
+  startOffset: number;
+  endOffset: number;
+  parentElement: HTMLElement;
+  originalText: string;
+}
+
 interface EditorProps {
   currentFile: FileItem;
   onContentChange: (content: string) => void;
@@ -53,12 +61,92 @@ const Editor: React.FC<EditorProps> = ({
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const isInitializedRef = useRef(false);
+  const [activeSelection, setActiveSelection] = useState<SelectionInfo | null>(null);
   const [hoveringBarPosition, setHoveringBarPosition] = useState<{
     top: number;
     left: number;
   } | null>(null);
   const [selectedText, setSelectedText] = useState<string>("");
   const [isSelecting, setIsSelecting] = useState(false);
+
+  // Get iframe styles including tracked changes styling
+  const getIframeStyles = () => `
+    .tracked-change {
+      background-color: #ffff00;
+      transition: background-color 0.3s ease;
+    }
+    .tracked-change:hover {
+      background-color: #ffeb3b;
+    }
+    body {
+      font-family: 'Calibri', sans-serif;
+      font-size: 11pt;
+      line-height: 1.15;
+      background-color: #f0f0f0;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    #editor-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0.5in 0;
+      box-sizing: border-box;
+      min-height: 100vh;
+    }
+    #editor-content {
+      background-color: white;
+      width: 8.5in;
+      min-height: 11in;
+      padding: 1in;
+      margin-bottom: 0.5in;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      box-sizing: border-box;
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+      word-break: break-word;
+    }
+    @media print {
+      body { background-color: white; }
+      #editor-container { padding: 0; }
+      #editor-content {
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        margin: 0;
+        padding: 0;
+        box-shadow: none;
+      }
+    }
+  `;
+
+  const getSelectionInfo = (selection: Selection): SelectionInfo | null => {
+    if (!selection.rangeCount) return null;
+    
+    const range = selection.getRangeAt(0);
+    const elementId = `sel-${Date.now()}`;
+    const span = document.createElement('span');
+    span.id = elementId;
+    
+    try {
+      range.surroundContents(span);
+      
+      return {
+        elementId,
+        startOffset: range.startOffset,
+        endOffset: range.endOffset,
+        parentElement: span.parentElement as HTMLElement,
+        originalText: span.textContent || ''
+      };
+    } catch (error) {
+      console.error('Error creating selection info:', error);
+      return null;
+    }
+  };
 
   useEffect(() => {
     setHtml(currentFile.content);
@@ -79,59 +167,7 @@ const Editor: React.FC<EditorProps> = ({
           <html>
             <head>
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <style>
-                body {
-                  font-family: 'Calibri', sans-serif;
-                  font-size: 11pt;
-                  line-height: 1.15;
-                  background-color: #f0f0f0;
-                  margin: 0;
-                  padding: 0;
-                  display: flex;
-                  flex-direction: column;
-                  align-items: center;
-                  min-height: 100vh;
-                }
-                #editor-container {
-                  display: flex;
-                  flex-direction: column;
-                  align-items: center;
-                  padding: 0.5in 0;
-                  box-sizing: border-box;
-                  min-height: 100vh;
-                }
-                #editor-content {
-                  background-color: white;
-                  width: 8.5in;
-                  min-height: 11in;
-                  padding: 1in;
-                  margin-bottom: 0.5in;
-                  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-                  box-sizing: border-box;
-                  overflow-wrap: break-word;
-                  word-wrap: break-word;
-                  word-break: break-word;
-                }
-                .tracked-change {
-                  background-color: #ffff00;
-                }
-                @media print {
-                  body {
-                    background-color: white;
-                  }
-                  #editor-container {
-                    padding: 0;
-                  }
-                  #editor-content {
-                    width: 100%;
-                    height: 100%;
-                    min-height: 0;
-                    margin: 0;
-                    padding: 0;
-                    box-shadow: none;
-                  }
-                }
-              </style>
+              <style>${getIframeStyles()}</style>
             </head>
             <body>
               <div id="editor-container">
@@ -155,6 +191,29 @@ const Editor: React.FC<EditorProps> = ({
       }
     }
   }, [html]);
+
+  const handleSelectionChange = useCallback(() => {
+    if (iframeRef.current) {
+      const doc = iframeRef.current.contentDocument;
+      if (doc) {
+        const selection = doc.getSelection();
+        if (selection && !selection.isCollapsed) {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          const iframeRect = iframeRef.current.getBoundingClientRect();
+
+          setHoveringBarPosition({
+            top: rect.bottom - iframeRect.top + 5,
+            left: rect.left - iframeRect.left + rect.width / 2,
+          });
+          setSelectedText(selection.toString());
+        } else {
+          setHoveringBarPosition(null);
+          setSelectedText("");
+        }
+      }
+    }
+  }, []);
 
   const attachIframeListeners = useCallback(
     (doc: Document) => {
@@ -216,84 +275,169 @@ const Editor: React.FC<EditorProps> = ({
       setIsUnderline,
       setTextAlign,
       onContentChange,
+      handleSelectionChange,
     ]
-  );
-
-  const applyFormatting = useCallback(
-    (command: string, value: string = "") => {
-      if (iframeRef.current) {
-        const doc = iframeRef.current.contentDocument;
-        if (doc) {
-          doc.execCommand("styleWithCSS", false, "true");
-
-          if (command === "fontSize") {
-            doc.execCommand(
-              command,
-              false,
-              (parseInt(value, 10) / 16).toString()
-            );
-          } else {
-            doc.execCommand(command, false, value);
-          }
-
-          const newContent = doc.getElementById("editor-content")!.innerHTML;
-          setHtml(newContent);
-          onContentChange(newContent);
-
-          updateFormattingState(doc);
-
-          iframeRef.current.focus();
-          doc.getElementById("editor-content")!.focus();
-        }
-      }
-    },
-    [setHtml, onContentChange]
   );
 
   const handleQuickAction = useCallback(
     async (action: string) => {
       if (iframeRef.current && selectedText) {
         try {
+          const doc = iframeRef.current.contentDocument;
+          if (!doc) return;
+
+          const selection = doc.getSelection();
+          if (!selection || !selection.rangeCount) return;
+
+          // Get and store selection info before making any changes
+          const selectionInfo = getSelectionInfo(selection);
+          if (!selectionInfo) return;
+          
+          setActiveSelection(selectionInfo);
+
+          // Create a temporary marker and immediately highlight it
+          const element = doc.getElementById(selectionInfo.elementId);
+          if (element) {
+            element.className = 'tracked-change';
+          }
+
+          // Update editor to show the selection is being processed
+          const newContent = doc.getElementById("editor-content")!.innerHTML;
+          setHtml(newContent);
+          onContentChange(newContent);
+
+          // Call the quick action with the original selected text
           await onQuickAction(selectedText, action);
-          // The trackedChanges will be updated by the parent component
         } catch (error) {
           console.error("Error applying quick action:", error);
+          // Clean up on error
+          setActiveSelection(null);
         }
       }
     },
-    [selectedText, onQuickAction]
+    [selectedText, onQuickAction, setHtml, onContentChange]
   );
 
   const handleCustomAction = useCallback(
     async (action: string, isEdit: boolean) => {
       if (iframeRef.current && selectedText) {
         try {
+          const doc = iframeRef.current.contentDocument;
+          if (!doc) return;
+
+          const selection = doc.getSelection();
+          if (!selection || !selection.rangeCount) return;
+
+          if (isEdit) {
+            // Get and store selection info before making any changes
+            const selectionInfo = getSelectionInfo(selection);
+            if (!selectionInfo) return;
+            
+            setActiveSelection(selectionInfo);
+
+            // Create a temporary marker and immediately highlight it
+            const element = doc.getElementById(selectionInfo.elementId);
+            if (element) {
+              element.className = 'tracked-change';
+            }
+
+            // Update editor to show selection is being processed
+            const newContent = doc.getElementById("editor-content")!.innerHTML;
+            setHtml(newContent);
+            onContentChange(newContent);
+          }
+          
+          // Call the custom action
           await onCustomAction(selectedText, action, isEdit);
-          // The trackedChanges will be updated by the parent component
         } catch (error) {
           console.error("Error applying custom action:", error);
+          setActiveSelection(null);
         }
       }
     },
-    [selectedText, onCustomAction]
+    [selectedText, onCustomAction, setHtml, onContentChange]
   );
+
+  const applyTrackedChangesToEditor = useCallback(() => {
+    if (!trackedChanges || !iframeRef.current) return;
+
+    const doc = iframeRef.current.contentDocument;
+    if (!doc) return;
+
+    // If we don't have an elementId in tracked changes, use the active selection
+    if (!trackedChanges.elementId && activeSelection) {
+      const newTrackedChanges = {
+        ...trackedChanges,
+        elementId: activeSelection.elementId
+      };
+      onTrackedChangesUpdate(newTrackedChanges);
+      return;
+    }
+
+    const elementId = trackedChanges.elementId || activeSelection?.elementId;
+    if (!elementId) return;
+
+    // Try to find the element we're supposed to modify
+    const element = doc.getElementById(elementId);
+    if (!element) {
+      // If we can't find the element but have active selection info,
+      // try to reestablish the selection context
+      if (activeSelection) {
+        const newSpan = doc.createElement('span');
+        newSpan.id = elementId;
+        newSpan.className = 'tracked-change';
+        newSpan.innerHTML = trackedChanges.versions[trackedChanges.currentVersionIndex];
+        
+        const content = doc.getElementById("editor-content")!.innerHTML;
+        const escapedOriginal = trackedChanges.original
+          .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          .replace(/\s+/g, '\\s+');
+        
+        const regex = new RegExp(`(${escapedOriginal})`, 'g');
+        const updatedContent = content.replace(regex, `<span id="${elementId}" class="tracked-change">${trackedChanges.versions[trackedChanges.currentVersionIndex]}</span>`);
+        
+        if (content !== updatedContent) {
+          doc.getElementById("editor-content")!.innerHTML = updatedContent;
+        }
+      }
+    } else {
+      // Update existing element
+      element.innerHTML = trackedChanges.versions[trackedChanges.currentVersionIndex];
+    }
+
+    // Update the editor content
+    const finalContent = doc.getElementById("editor-content")!.innerHTML;
+    setHtml(finalContent);
+    onContentChange(finalContent);
+
+    // Scroll the change into view
+    const finalElement = doc.getElementById(elementId);
+    if (finalElement) {
+      setTimeout(() => {
+        finalElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+
+    // Clear active selection after applying changes
+    setActiveSelection(null);
+  }, [trackedChanges, activeSelection, onTrackedChangesUpdate, setHtml, onContentChange]);
 
   const handleAcceptChanges = useCallback(() => {
     if (trackedChanges && iframeRef.current) {
       const doc = iframeRef.current.contentDocument;
       if (doc) {
-        const trackedChangeElements =
-          doc.getElementsByClassName("tracked-change");
-        if (trackedChangeElements.length > 0) {
-          const element = trackedChangeElements[0];
+        const element = doc.getElementById(trackedChanges.elementId || "") as HTMLElement | null;
+        if (element) {
+          // Keep the content but remove the tracked-change class and ID
           element.classList.remove("tracked-change");
+          element.removeAttribute("id");
+          
+          const newContent = doc.getElementById("editor-content")!.innerHTML;
+          setHtml(newContent);
+          onContentChange(newContent);
+          onTrackedChangesUpdate(null);
+          setHoveringBarPosition(null);
         }
-
-        const newContent = doc.getElementById("editor-content")!.innerHTML;
-        setHtml(newContent);
-        onContentChange(newContent);
-        onTrackedChangesUpdate(null);
-        setHoveringBarPosition(null);
       }
     }
   }, [trackedChanges, setHtml, onContentChange, onTrackedChangesUpdate]);
@@ -302,19 +446,18 @@ const Editor: React.FC<EditorProps> = ({
     if (trackedChanges && iframeRef.current) {
       const doc = iframeRef.current.contentDocument;
       if (doc) {
-        const trackedChangeElements =
-          doc.getElementsByClassName("tracked-change");
-        if (trackedChangeElements.length > 0) {
-          const element = trackedChangeElements[0];
-          element.innerHTML = trackedChanges.original;
-          element.classList.remove("tracked-change");
+        const element = doc.getElementById(trackedChanges.elementId || "") as HTMLElement | null;
+        if (element) {
+          // Replace the element with the original text
+          const textNode = doc.createTextNode(trackedChanges.original);
+          element.parentNode?.replaceChild(textNode, element);
+          
+          const newContent = doc.getElementById("editor-content")!.innerHTML;
+          setHtml(newContent);
+          onContentChange(newContent);
+          onTrackedChangesUpdate(null);
+          setHoveringBarPosition(null);
         }
-
-        const newContent = doc.getElementById("editor-content")!.innerHTML;
-        setHtml(newContent);
-        onContentChange(newContent);
-        onTrackedChangesUpdate(null);
-        setHoveringBarPosition(null);
       }
     }
   }, [trackedChanges, setHtml, onContentChange, onTrackedChangesUpdate]);
@@ -337,17 +480,15 @@ const Editor: React.FC<EditorProps> = ({
             currentVersionIndex: newIndex,
           };
 
-          const trackedChangeElements =
-            doc.getElementsByClassName("tracked-change");
-          if (trackedChangeElements.length > 0) {
-            const element = trackedChangeElements[0];
+          const element = doc.getElementById(trackedChanges.elementId || "") as HTMLElement | null;
+          if (element) {
             element.innerHTML = newTrackedChanges.versions[newIndex];
+            
+            const newContent = doc.getElementById("editor-content")!.innerHTML;
+            setHtml(newContent);
+            onContentChange(newContent);
+            onTrackedChangesUpdate(newTrackedChanges);
           }
-
-          const newContent = doc.getElementById("editor-content")!.innerHTML;
-          setHtml(newContent);
-          onContentChange(newContent);
-          onTrackedChangesUpdate(newTrackedChanges);
         }
       }
     },
@@ -357,14 +498,23 @@ const Editor: React.FC<EditorProps> = ({
   const handleReprocessChanges = useCallback(async () => {
     if (trackedChanges && iframeRef.current) {
       const doc = iframeRef.current.contentDocument;
-      if (doc) {
-        try {
-          const currentVersion =
-            trackedChanges.versions[trackedChanges.currentVersionIndex];
-          await onQuickAction(currentVersion, "improve");
-          // The trackedChanges will be updated by the parent component
-        } catch (error) {
-          console.error("Error reprocessing changes:", error);
+      if (doc && trackedChanges.elementId) {
+        const element = doc.getElementById(trackedChanges.elementId);
+        if (element) {
+          try {
+            const currentVersion = trackedChanges.versions[trackedChanges.currentVersionIndex];
+            // Store the element position before reprocessing
+            setActiveSelection({
+              elementId: trackedChanges.elementId,
+              startOffset: 0,
+              endOffset: currentVersion.length,
+              parentElement: element.parentElement as HTMLElement,
+              originalText: currentVersion
+            });
+            await onQuickAction(currentVersion, "improve");
+          } catch (error) {
+            console.error("Error reprocessing changes:", error);
+          }
         }
       }
     }
@@ -396,6 +546,37 @@ const Editor: React.FC<EditorProps> = ({
       range.insertNode(span.firstChild!);
     }
   };
+
+  const applyFormatting = useCallback(
+    (command: string, value: string = "") => {
+      if (iframeRef.current) {
+        const doc = iframeRef.current.contentDocument;
+        if (doc) {
+          doc.execCommand("styleWithCSS", false, "true");
+
+          if (command === "fontSize") {
+            doc.execCommand(
+              command,
+              false,
+              (parseInt(value, 10) / 16).toString()
+            );
+          } else {
+            doc.execCommand(command, false, value);
+          }
+
+          const newContent = doc.getElementById("editor-content")!.innerHTML;
+          setHtml(newContent);
+          onContentChange(newContent);
+
+          updateFormattingState(doc);
+
+          iframeRef.current.focus();
+          doc.getElementById("editor-content")!.focus();
+        }
+      }
+    },
+    [setHtml, onContentChange]
+  );
 
   const clearFormatting = useCallback(() => {
     if (iframeRef.current) {
@@ -440,47 +621,6 @@ const Editor: React.FC<EditorProps> = ({
       }
     }
   }, []);
-
-  const handleSelectionChange = useCallback(() => {
-    if (iframeRef.current) {
-      const doc = iframeRef.current.contentDocument;
-      if (doc) {
-        const selection = doc.getSelection();
-        if (selection && !selection.isCollapsed) {
-          const range = selection.getRangeAt(0);
-          const rect = range.getBoundingClientRect();
-          const iframeRect = iframeRef.current.getBoundingClientRect();
-
-          setHoveringBarPosition({
-            top: rect.bottom - iframeRect.top + 5, // Position below the selection
-            left: rect.left - iframeRect.left + rect.width / 2,
-          });
-          setSelectedText(selection.toString());
-        } else {
-          setHoveringBarPosition(null);
-          setSelectedText("");
-        }
-      }
-    }
-  }, []);
-
-  const applyTrackedChangesToEditor = useCallback(() => {
-    if (trackedChanges && iframeRef.current) {
-      const doc = iframeRef.current.contentDocument;
-      if (doc) {
-        const content = doc.getElementById("editor-content")!.innerHTML;
-        const updatedContent = content.replace(
-          trackedChanges.original,
-          `<span class="tracked-change">${
-            trackedChanges.versions[trackedChanges.currentVersionIndex]
-          }</span>`
-        );
-        doc.getElementById("editor-content")!.innerHTML = updatedContent;
-        setHtml(updatedContent);
-        onContentChange(updatedContent);
-      }
-    }
-  }, [trackedChanges, setHtml, onContentChange]);
 
   useEffect(() => {
     if (!isInitializedRef.current) {
