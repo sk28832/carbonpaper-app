@@ -95,13 +95,14 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
         setCurrentFile((prevFile) => ({
           ...prevFile!,
           content: newContent,
-          isSaved: lastSavedContentRef.current === newContent,
+          isSaved:
+            lastSavedContentRef.current === newContent && !trackedChanges,
         }));
         setEditorContent(newContent);
         setEditorTextContent(extractTextFromHtml(newContent));
       }
     },
-    [currentFile]
+    [currentFile, trackedChanges]
   );
 
   const handleTrackedChangesUpdate = useCallback(
@@ -113,7 +114,9 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           setCurrentFile((prevFile) => ({
             ...prevFile!,
             trackedChanges: newTrackedChanges,
-            isSaved: false,
+            isSaved:
+              !newTrackedChanges &&
+              lastSavedContentRef.current === lastContentRef.current,
           }));
         } catch (error) {
           console.error("Error updating tracked changes:", error);
@@ -322,9 +325,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   const handleNavigation = useCallback(
     (path: string) => {
       const hasUnsavedChanges =
-        currentFile &&
-        (lastSavedContentRef.current !== lastContentRef.current ||
-          !!trackedChanges);
+        currentFile && lastSavedContentRef.current !== lastContentRef.current;
 
       if (hasUnsavedChanges) {
         setShowSaveDialog(true);
@@ -343,7 +344,6 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
       router.push(navigationPath);
     } catch (error) {
       console.error("Error saving before navigation:", error);
-      // Allow user to choose whether to continue without saving
       const shouldContinue = window.confirm(
         "Failed to save changes. Would you like to continue without saving?"
       );
@@ -358,7 +358,6 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
     setNavigationPath("");
   }, []);
 
-  // Auto-save functionality
   useEffect(() => {
     const autoSaveInterval = setInterval(async () => {
       const hasUnsavedChanges =
@@ -373,7 +372,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           console.error("Auto-save failed:", error);
         }
       }
-    }, 30000); // Auto-save every 30 seconds
+    }, 30000);
 
     return () => clearInterval(autoSaveInterval);
   }, [currentFile, trackedChanges, handleSave]);
@@ -402,7 +401,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   }
 
   const hasUnsavedChanges =
-    lastSavedContentRef.current !== lastContentRef.current || !!trackedChanges;
+    lastSavedContentRef.current !== lastContentRef.current;
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
