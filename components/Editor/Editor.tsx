@@ -10,6 +10,12 @@ interface EditorProps {
   onContentChange: (content: string) => void;
   trackedChanges: TrackedChanges | null;
   onTrackedChangesUpdate: (trackedChanges: TrackedChanges | null) => void;
+  onQuickAction: (selectedText: string, action: string) => Promise<void>;
+  onCustomAction: (
+    selectedText: string,
+    action: string,
+    isEdit: boolean
+  ) => Promise<void>;
 }
 
 const Editor: React.FC<EditorProps> = ({
@@ -17,6 +23,8 @@ const Editor: React.FC<EditorProps> = ({
   onContentChange,
   trackedChanges,
   onTrackedChangesUpdate,
+  onQuickAction,
+  onCustomAction,
 }) => {
   const {
     html,
@@ -242,54 +250,32 @@ const Editor: React.FC<EditorProps> = ({
     [setHtml, onContentChange]
   );
 
-  const handleAiAction = useCallback(
+  const handleQuickAction = useCallback(
     async (action: string) => {
-      if (iframeRef.current) {
-        const doc = iframeRef.current.contentDocument;
-        if (doc) {
-          const selection = doc.getSelection();
-          if (selection && !selection.isCollapsed) {
-            const range = selection.getRangeAt(0);
-            const selectedText = selection.toString();
-
-            try {
-              const response = await fetch("/api/hoverbar", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ selectedText, command: action }),
-              });
-              const suggestion = await response.json();
-
-              const newTrackedChanges: TrackedChanges = {
-                original: selectedText,
-                versions: [suggestion.text],
-                currentVersionIndex: 0,
-              };
-
-              onTrackedChangesUpdate(newTrackedChanges);
-
-              // Highlight the changed text
-              const span = doc.createElement("span");
-              span.innerHTML = suggestion.text;
-              span.className = "tracked-change";
-              range.deleteContents();
-              range.insertNode(span);
-
-              // Update the content
-              const newContent =
-                doc.getElementById("editor-content")!.innerHTML;
-              setHtml(newContent);
-              onContentChange(newContent);
-            } catch (error) {
-              console.error("Error fetching AI suggestion:", error);
-            }
-          }
+      if (iframeRef.current && selectedText) {
+        try {
+          await onQuickAction(selectedText, action);
+          // The trackedChanges will be updated by the parent component
+        } catch (error) {
+          console.error("Error applying quick action:", error);
         }
       }
     },
-    [setHtml, onContentChange, onTrackedChangesUpdate]
+    [selectedText, onQuickAction]
+  );
+
+  const handleCustomAction = useCallback(
+    async (action: string, isEdit: boolean) => {
+      if (iframeRef.current && selectedText) {
+        try {
+          await onCustomAction(selectedText, action, isEdit);
+          // The trackedChanges will be updated by the parent component
+        } catch (error) {
+          console.error("Error applying custom action:", error);
+        }
+      }
+    },
+    [selectedText, onCustomAction]
   );
 
   const handleAcceptChanges = useCallback(() => {
@@ -307,6 +293,7 @@ const Editor: React.FC<EditorProps> = ({
         setHtml(newContent);
         onContentChange(newContent);
         onTrackedChangesUpdate(null);
+        setHoveringBarPosition(null);
       }
     }
   }, [trackedChanges, setHtml, onContentChange, onTrackedChangesUpdate]);
@@ -327,6 +314,7 @@ const Editor: React.FC<EditorProps> = ({
         setHtml(newContent);
         onContentChange(newContent);
         onTrackedChangesUpdate(null);
+        setHoveringBarPosition(null);
       }
     }
   }, [trackedChanges, setHtml, onContentChange, onTrackedChangesUpdate]);
@@ -371,42 +359,16 @@ const Editor: React.FC<EditorProps> = ({
       const doc = iframeRef.current.contentDocument;
       if (doc) {
         try {
-          const response = await fetch("/api/hoverbar", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              selectedText:
-                trackedChanges.versions[trackedChanges.currentVersionIndex],
-              command: "improve",
-            }),
-          });
-          const suggestion = await response.json();
-
-          const newTrackedChanges = {
-            ...trackedChanges,
-            versions: [...trackedChanges.versions, suggestion.text],
-            currentVersionIndex: trackedChanges.versions.length,
-          };
-
-          const trackedChangeElements =
-            doc.getElementsByClassName("tracked-change");
-          if (trackedChangeElements.length > 0) {
-            const element = trackedChangeElements[0];
-            element.innerHTML = suggestion.text;
-          }
-
-          const newContent = doc.getElementById("editor-content")!.innerHTML;
-          setHtml(newContent);
-          onContentChange(newContent);
-          onTrackedChangesUpdate(newTrackedChanges);
+          const currentVersion =
+            trackedChanges.versions[trackedChanges.currentVersionIndex];
+          await onQuickAction(currentVersion, "improve");
+          // The trackedChanges will be updated by the parent component
         } catch (error) {
           console.error("Error reprocessing changes:", error);
         }
       }
     }
-  }, [trackedChanges, setHtml, onContentChange, onTrackedChangesUpdate]);
+  }, [trackedChanges, onQuickAction]);
 
   const updateFormattingState = (doc: Document) => {
     const selection = doc.getSelection();
@@ -580,7 +542,8 @@ const Editor: React.FC<EditorProps> = ({
         />
         {!isSelecting && hoveringBarPosition && (
           <HoveringFormatBar
-            onAiAction={handleAiAction}
+            onQuickAction={handleQuickAction}
+            onCustomAction={handleCustomAction}
             position={hoveringBarPosition}
             trackedChanges={trackedChanges}
             onAcceptChanges={handleAcceptChanges}

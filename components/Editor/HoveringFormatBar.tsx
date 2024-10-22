@@ -1,22 +1,16 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Wand2, ChevronDown, ArrowLeft, ArrowRight, RotateCcw, Check } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Wand2, Check, X, RotateCcw, ArrowLeft, ArrowRight } from 'lucide-react';
+import { TrackedChanges } from '@/types/fileTypes';
 
 interface HoveringFormatBarProps {
-  onAiAction: (action: string, value?: string) => void;
+  onQuickAction: (action: string) => Promise<void>;
+  onCustomAction: (action: string, isEdit: boolean) => Promise<void>;
   position: { top: number; left: number } | null;
-  trackedChanges: {
-    original: string;
-    versions: string[];
-    currentVersionIndex: number;
-  } | null;
+  trackedChanges: TrackedChanges | null;
   onAcceptChanges: () => void;
   onRejectChanges: () => void;
   onNavigateVersion: (direction: 'prev' | 'next') => void;
@@ -24,7 +18,8 @@ interface HoveringFormatBarProps {
 }
 
 const HoveringFormatBar: React.FC<HoveringFormatBarProps> = ({
-  onAiAction,
+  onQuickAction,
+  onCustomAction,
   position,
   trackedChanges,
   onAcceptChanges,
@@ -32,91 +27,90 @@ const HoveringFormatBar: React.FC<HoveringFormatBarProps> = ({
   onNavigateVersion,
   onReprocessChanges,
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [customAction, setCustomAction] = useState('');
 
   if (!position) return null;
 
-  const handleCustomAction = () => {
+  const handleCustomAction = async () => {
     if (customAction.trim()) {
-      onAiAction(customAction);
+      await onCustomAction(customAction, isEditMode);
       setCustomAction('');
-      setIsOpen(false);
     }
+  };
+
+  const handleQuickAction = async (action: string) => {
+    await onQuickAction(action);
   };
 
   return (
     <div
-      className="absolute bg-white border border-gray-200 rounded-md shadow-lg p-2 flex items-center space-x-2"
+      className="absolute bg-white border border-gray-200 rounded-md shadow-lg p-2 z-50 flex items-center space-x-2"
       style={{
         top: `${position.top}px`,
         left: `${position.left}px`,
         transform: 'translateX(-50%)',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
       }}
     >
       {trackedChanges ? (
         <>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onNavigateVersion('prev')}
-            disabled={trackedChanges.currentVersionIndex === 0}
-          >
+          <Button variant="ghost" size="sm" onClick={() => onNavigateVersion('prev')} disabled={trackedChanges.currentVersionIndex === 0}>
             <ArrowLeft size={16} />
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onNavigateVersion('next')}
-            disabled={trackedChanges.currentVersionIndex === trackedChanges.versions.length - 1}
-          >
+          <Button variant="ghost" size="sm" onClick={() => onNavigateVersion('next')} disabled={trackedChanges.currentVersionIndex === trackedChanges.versions.length - 1}>
             <ArrowRight size={16} />
           </Button>
-          <Button variant="outline" size="sm" onClick={onReprocessChanges}>
-            <RotateCcw size={16} />
-          </Button>
           <Button variant="default" size="sm" onClick={onAcceptChanges}>
-            <Check size={16} className="mr-2" />
-            Accept
+            <Check size={16} />
           </Button>
-          <Button variant="ghost" size="sm" onClick={onRejectChanges}>
-            Reject
+          <Button variant="outline" size="sm" onClick={onRejectChanges}>
+            <X size={16} />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onReprocessChanges}>
+            <RotateCcw size={16} />
           </Button>
         </>
       ) : (
-        <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="flex items-center">
-              <Wand2 size={16} className="mr-2" />
-              AI Actions
-              <ChevronDown size={16} className="ml-2" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onSelect={() => onAiAction('improve')}>
-              Improve
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onAiAction('fixGrammar')}>
-              Fix Grammar
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onAiAction('shorter')}>
-              Make Shorter
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onAiAction('longer')}>
-              Make Longer
-            </DropdownMenuItem>
-            <div className="p-2">
-              <Input
-                type="text"
-                placeholder="Custom action..."
-                value={customAction}
-                onChange={(e) => setCustomAction(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleCustomAction()}
-              />
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <>
+          <Wand2 size={16} className="text-gray-500" />
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="edit-mode"
+              checked={isEditMode}
+              onCheckedChange={setIsEditMode}
+            />
+            <Label htmlFor="edit-mode" className="text-sm">
+              {isEditMode ? 'Edit' : 'Ask'}
+            </Label>
+          </div>
+          {isEditMode && (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => handleQuickAction('improve')}>
+                Improve
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => handleQuickAction('fixGrammar')}>
+                Fix
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => handleQuickAction('shorter')}>
+                Shorter
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => handleQuickAction('longer')}>
+                Longer
+              </Button>
+            </>
+          )}
+          <Input
+            type="text"
+            placeholder={isEditMode ? "Custom edit..." : "Ask a question..."}
+            value={customAction}
+            onChange={(e) => setCustomAction(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleCustomAction()}
+            className="w-40"
+          />
+          <Button variant="default" size="sm" onClick={handleCustomAction}>
+            Send
+          </Button>
+        </>
       )}
     </div>
   );
