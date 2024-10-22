@@ -1,7 +1,13 @@
 // File: components/Layout/CarbonPaper.tsx
 "use client";
 
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  useMemo,
+} from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Resizable } from "re-resizable";
@@ -25,8 +31,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { addChatMessage, updateFile, updateTrackedChanges } from "@/lib/mockDb";
-import { v4 as uuidv4 } from "uuid";
 
 interface CarbonPaperProps {
   fileId: string;
@@ -46,9 +50,11 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   const [trackedChanges, setTrackedChanges] = useState<TrackedChanges | null>(
     null
   );
+
   const isSavingRef = useRef(false);
   const lastSavedContentRef = useRef("");
   const lastContentRef = useRef("");
+  const lastSavedMessagesRef = useRef<Message[]>([]);
   const isInitialLoad = useRef(true);
 
   useEffect(() => {
@@ -65,6 +71,9 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           setTrackedChanges(file.trackedChanges || null);
           lastSavedContentRef.current = file.content;
           lastContentRef.current = file.content;
+          lastSavedMessagesRef.current = JSON.parse(
+            JSON.stringify(file.messages || [])
+          ); // Deep copy
         } else {
           console.error("Failed to fetch file");
           router.push("/");
@@ -86,6 +95,35 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
     return doc.body.textContent || "";
   };
 
+  const hasMessagesChanged = useCallback(() => {
+    if (messages.length !== lastSavedMessagesRef.current.length) return true;
+    return messages.some((msg, index) => {
+      const savedMsg = lastSavedMessagesRef.current[index];
+      if (!savedMsg) return true;
+
+      // Deep comparison of message properties
+      return (
+        msg.content !== savedMsg.content ||
+        msg.type !== savedMsg.type ||
+        msg.role !== savedMsg.role ||
+        JSON.stringify(msg.trackedChanges) !==
+          JSON.stringify(savedMsg.trackedChanges) ||
+        JSON.stringify(msg.citations) !== JSON.stringify(savedMsg.citations)
+      );
+    });
+  }, [messages]);
+
+  const hasUnsavedChanges = useMemo(() => {
+    if (!currentFile) return false;
+
+    const contentChanged =
+      lastSavedContentRef.current !== lastContentRef.current;
+    const messagesChanged = hasMessagesChanged();
+    const hasTrackedChanges = !!trackedChanges;
+
+    return contentChanged || messagesChanged || hasTrackedChanges;
+  }, [currentFile, hasMessagesChanged, trackedChanges]);
+
   const handleContentChange = useCallback(
     (newContent: string) => {
       if (!currentFile || isInitialLoad.current) return;
@@ -95,14 +133,12 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
         setCurrentFile((prevFile) => ({
           ...prevFile!,
           content: newContent,
-          isSaved:
-            lastSavedContentRef.current === newContent && !trackedChanges,
         }));
         setEditorContent(newContent);
         setEditorTextContent(extractTextFromHtml(newContent));
       }
     },
-    [currentFile, trackedChanges]
+    [currentFile]
   );
 
   const handleTrackedChangesUpdate = useCallback(
@@ -110,13 +146,9 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
       setTrackedChanges(newTrackedChanges);
       if (currentFile) {
         try {
-          await updateTrackedChanges(currentFile.id, newTrackedChanges);
           setCurrentFile((prevFile) => ({
             ...prevFile!,
             trackedChanges: newTrackedChanges,
-            isSaved:
-              !newTrackedChanges &&
-              lastSavedContentRef.current === lastContentRef.current,
           }));
         } catch (error) {
           console.error("Error updating tracked changes:", error);
@@ -130,13 +162,14 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
     async (newMessage: Message) => {
       if (currentFile) {
         try {
-          await addChatMessage(currentFile.id, newMessage);
-          setMessages((prevMessages) => [...prevMessages, newMessage]);
-          setCurrentFile((prevFile) => ({
-            ...prevFile!,
-            messages: [...prevFile!.messages, newMessage],
-            isSaved: false,
-          }));
+          setMessages(prevMessages => {
+            const newMessages = [...prevMessages, newMessage];
+            setCurrentFile(prevFile => ({
+              ...prevFile!,
+              messages: newMessages,
+            }));
+            return newMessages;
+          });
         } catch (error) {
           console.error("Error adding chat message:", error);
         }
@@ -160,7 +193,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
         formData.append("selectedSources", JSON.stringify([]));
 
         const loadingMessage: Message = {
-          id: uuidv4(),
+          id: crypto.randomUUID(),
           role: "user",
           content: `Applying quick action: ${action} to "${selectedText}"`,
           type: "text",
@@ -179,7 +212,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
         const data = await response.json();
 
         const assistantMessage: Message = {
-          id: uuidv4(),
+          id: crypto.randomUUID(),
           role: "assistant",
           content: "Changes applied",
           type: "edit",
@@ -194,7 +227,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
         console.error("Error processing quick action:", error);
       }
     },
-    [currentFile, editorContent, handleTrackedChangesUpdate, handleAddMessage]
+    [currentFile, editorContent, handleAddMessage, handleTrackedChangesUpdate]
   );
 
   const handleCustomAction = useCallback(
@@ -216,7 +249,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
         formData.append("selectedSources", JSON.stringify([]));
 
         const userMessage: Message = {
-          id: uuidv4(),
+          id: crypto.randomUUID(),
           role: "user",
           content: isEdit
             ? `Change this text: "${selectedText}" using this instruction: ${action}`
@@ -237,7 +270,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
         const data = await response.json();
 
         const assistantMessage: Message = {
-          id: uuidv4(),
+          id: crypto.randomUUID(),
           role: "assistant",
           content: isEdit ? "Suggested edit" : data.reply,
           type: isEdit ? "edit" : "text",
@@ -264,9 +297,10 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
       const updatedFile = {
         ...currentFile,
         content: editorContent,
-        messages,
+        messages: messages,
         trackedChanges,
         isSaved: true,
+        lastModified: new Date().toISOString(),
       };
 
       const response = await fetch(`/api/files/${currentFile.id}`, {
@@ -284,6 +318,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
       const savedFile = await response.json();
       lastSavedContentRef.current = editorContent;
       lastContentRef.current = editorContent;
+      lastSavedMessagesRef.current = JSON.parse(JSON.stringify(messages)); // Deep copy
       setCurrentFile(savedFile);
     } catch (error) {
       console.error("Error saving file:", error);
@@ -313,7 +348,6 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
         setCurrentFile((prevFile) => ({
           ...prevFile!,
           name: newName,
-          isSaved: false,
         }));
       } catch (error) {
         console.error("Error updating file name:", error);
@@ -324,9 +358,6 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
 
   const handleNavigation = useCallback(
     (path: string) => {
-      const hasUnsavedChanges =
-        currentFile && lastSavedContentRef.current !== lastContentRef.current;
-
       if (hasUnsavedChanges) {
         setShowSaveDialog(true);
         setNavigationPath(path);
@@ -334,7 +365,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
         router.push(path);
       }
     },
-    [currentFile, trackedChanges, router]
+    [hasUnsavedChanges, router]
   );
 
   const handleConfirmNavigation = useCallback(async () => {
@@ -360,11 +391,6 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
 
   useEffect(() => {
     const autoSaveInterval = setInterval(async () => {
-      const hasUnsavedChanges =
-        currentFile &&
-        (lastSavedContentRef.current !== lastContentRef.current ||
-          !!trackedChanges);
-
       if (hasUnsavedChanges && !isSavingRef.current) {
         try {
           await handleSave();
@@ -375,7 +401,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
     }, 30000);
 
     return () => clearInterval(autoSaveInterval);
-  }, [currentFile, trackedChanges, handleSave]);
+  }, [hasUnsavedChanges, handleSave]);
 
   if (isLoading) {
     return (
@@ -399,9 +425,6 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
   if (!currentFile) {
     return <div>File not found</div>;
   }
-
-  const hasUnsavedChanges =
-    lastSavedContentRef.current !== lastContentRef.current;
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -431,14 +454,14 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
             <Save className="h-5 w-5" />
           </Button>
           <Badge
-            variant={hasUnsavedChanges ? "outline" : "secondary"}
+            variant={!hasUnsavedChanges ? "secondary" : "outline"}
             className={`text-xs px-2 py-1 transition-all duration-300 ${
-              hasUnsavedChanges
-                ? "bg-white text-gray-500 border-gray-300"
-                : "bg-gray-200 text-gray-700"
+              !hasUnsavedChanges
+                ? "bg-gray-200 text-gray-700"
+                : "bg-white text-gray-500 border-gray-300"
             }`}
           >
-            {hasUnsavedChanges ? "Unsaved" : "Saved"}
+            {!hasUnsavedChanges ? "Saved" : "Unsaved"}
           </Badge>
         </div>
         <Button

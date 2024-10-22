@@ -98,7 +98,8 @@ const AIChat: React.FC<AIChatProps> = ({
         content: inputMode === "edit" ? "Suggested edit" : data.reply,
         type: inputMode === "edit" ? "edit" : "text",
         ...(inputMode === "edit" && { trackedChanges: data.trackedChanges }),
-        ...((inputMode === "question" && data.citations) && { citations: data.citations }),
+        ...(inputMode === "question" &&
+          data.citations && { citations: data.citations }),
       };
 
       await addMessage(newAssistantMessage);
@@ -166,9 +167,9 @@ const AIChat: React.FC<AIChatProps> = ({
         >
           <ScrollArea className="h-full" ref={scrollAreaRef}>
             <AnimatePresence>
-              {messages.map((message, index) => (
+              {messages.map((message) => (
                 <motion.div
-                  key={index}
+                  key={message.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
