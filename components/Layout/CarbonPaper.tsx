@@ -471,7 +471,7 @@ const CarbonPaper: React.FC<CarbonPaperProps> = ({ fileId }) => {
           className="text-gray-600 hover:text-gray-900"
         >
           <Sparkles className="h-5 w-5" />
-          AI
+          CarbonAI
         </Button>
       </div>
       <div className="flex flex-grow overflow-hidden relative">

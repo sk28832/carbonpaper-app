@@ -199,7 +199,7 @@ const AIChat: React.FC<AIChatProps> = ({
                       ease: "linear",
                     }}
                   />
-                  <span>AI is thinking</span>
+                  <span>CarbonAI is thinking</span>
                 </div>
               </motion.div>
             )}
