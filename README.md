@@ -1,7 +1,6 @@
 # CarbonPaper
 
 <div align="center">
-  <img src="docs/images/carbonpaper-logo.png" alt="CarbonPaper Logo" width="200" />
   <h3>Intelligent Document Editing with AI Assistance</h3>
 </div>
 
