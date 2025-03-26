@@ -208,8 +208,6 @@ function extractCitations(reply: string, documentContent: string): string[] {
   return citations;
 }
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+// Replace deprecated config with new App Router config
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
